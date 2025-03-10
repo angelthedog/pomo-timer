@@ -1,0 +1,31 @@
+.slider {
+  height: 40px;
+  border: 2px solid var(--red);
+  border-radius: 20px;
+  position: relative;
+  z-index: 5;
+}
+
+.thumb {
+  background-color: var(--red);
+  cursor: pointer !important;
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  position: relative;
+  z-index: 6;
+  pointer-events: auto !important;
+}
+
+.track {
+  position: relative;
+  z-index: 4;
+}
+
+.slider.green {
+  border: 2px solid var(--green);
+}
+
+.slider.green .thumb {
+  background-color: var(--green);
+} 

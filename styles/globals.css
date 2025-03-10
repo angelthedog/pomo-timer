@@ -1,0 +1,72 @@
+:root {
+  --red: #f54e4e;
+  --green: #4aec8c;
+}
+
+body {
+  background-color: #30384b;
+  color: #eee;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+main {
+  padding-top: 50px;
+  max-width: 340px;
+  margin: 0 auto;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+button {
+  background-color: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  border: 0;
+  display: inline-block;
+  width: 100px;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+}
+
+button.with-text {
+  width: auto;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 1.4rem;
+  line-height: 36px;
+}
+
+button.with-text svg {
+  width: 36px;
+  float: left;
+  margin-right: 5px;
+}
+
+button.with-text.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Fix for clickable elements */
+a, button, [role="button"], input, label, select, textarea {
+  pointer-events: auto !important;
+  cursor: pointer;
+}
+
+label {
+  display: block;
+  margin-bottom: 10px;
+  margin-top: 20px;
+  text-transform: capitalize;
+} 
