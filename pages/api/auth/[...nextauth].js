@@ -67,7 +67,7 @@ export const authOptions = {
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   debug: process.env.NODE_ENV === 'development',
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET || 'pomodoro_nextauth_secret_key_123456789',
 };
 
 export default NextAuth(authOptions); 
