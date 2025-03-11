@@ -40,4 +40,14 @@ export const TIMER_SETTINGS = {
 export const UI = {
   AUTO_CLOSE_DELAY: 1500, // ms
   TICK_INTERVAL: 1000 // ms
-}; 
+};
+
+// Pink noise types
+export const PINK_NOISE_TYPES = [
+  'Rainfall',
+  'Ocean waves',
+  'Wind',
+  'Rustling leaves',
+  'Heartbeat',
+  'Fire crackling'
+]; 

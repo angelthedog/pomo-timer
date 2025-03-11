@@ -3,7 +3,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import BackButton from "./BackButton";
 import { useState, useEffect, useCallback } from 'react';
 import { fetchDefaultSettings, saveSettings as apiSaveSettings } from '../utils/api';
-import { COLORS, TIMER_SETTINGS, UI } from '../utils/constants';
+import { COLORS, TIMER_SETTINGS, PINK_NOISE_TYPES, UI } from '../utils/constants';
 import { useSession } from 'next-auth/react';
 
 function Settings() {
@@ -13,6 +13,9 @@ function Settings() {
   const [saveStatus, setSaveStatus] = useState(null);
   const [workMinutes, setWorkMinutes] = useState(settingsInfo.workMinutes);
   const [breakMinutes, setBreakMinutes] = useState(settingsInfo.breakMinutes);
+  const [noiseCancellation, setNoiseCancellation] = useState(settingsInfo.noiseCancellation);
+  const [pinkNoiseEnabled, setPinkNoiseEnabled] = useState(settingsInfo.pinkNoiseEnabled);
+  const [pinkNoiseType, setPinkNoiseType] = useState(settingsInfo.pinkNoiseType);
   
   // Load default settings from API
   useEffect(() => {
@@ -28,6 +31,18 @@ function Settings() {
         if (defaults.breakMinutes !== settingsInfo.breakMinutes) {
           settingsInfo.setBreakMinutes(defaults.breakMinutes);
           setBreakMinutes(defaults.breakMinutes);
+        }
+        if (defaults.noiseCancellation !== settingsInfo.noiseCancellation) {
+          settingsInfo.setNoiseCancellation(defaults.noiseCancellation);
+          setNoiseCancellation(defaults.noiseCancellation);
+        }
+        if (defaults.pinkNoiseEnabled !== settingsInfo.pinkNoiseEnabled) {
+          settingsInfo.setPinkNoiseEnabled(defaults.pinkNoiseEnabled);
+          setPinkNoiseEnabled(defaults.pinkNoiseEnabled);
+        }
+        if (defaults.pinkNoiseType !== settingsInfo.pinkNoiseType) {
+          settingsInfo.setPinkNoiseType(defaults.pinkNoiseType);
+          setPinkNoiseType(defaults.pinkNoiseType);
         }
       }
     };
@@ -48,6 +63,9 @@ function Settings() {
     // Update context
     settingsInfo.setWorkMinutes(workMinutes);
     settingsInfo.setBreakMinutes(breakMinutes);
+    settingsInfo.setNoiseCancellation(noiseCancellation);
+    settingsInfo.setPinkNoiseEnabled(pinkNoiseEnabled);
+    settingsInfo.setPinkNoiseType(pinkNoiseType);
     
     setIsSaving(true);
     setSaveStatus(null);
@@ -55,7 +73,10 @@ function Settings() {
     try {
       const result = await apiSaveSettings({
         workMinutes,
-        breakMinutes
+        breakMinutes,
+        noiseCancellation,
+        pinkNoiseEnabled,
+        pinkNoiseType
       });
       
       console.log('Save settings result:', result);
@@ -88,7 +109,7 @@ function Settings() {
     } finally {
       setIsSaving(false);
     }
-  }, [settingsInfo, workMinutes, breakMinutes, session]);
+  }, [settingsInfo, workMinutes, breakMinutes, noiseCancellation, pinkNoiseEnabled, pinkNoiseType, session]);
   
   const getStatusStyles = useCallback((type) => ({
     marginTop: '10px',
@@ -97,6 +118,23 @@ function Settings() {
     backgroundColor: type === 'success' ? COLORS.SUCCESS_BG : COLORS.ERROR_BG,
     color: type === 'success' ? COLORS.GREEN : COLORS.RED
   }), []);
+  
+  // Handle pink noise toggle
+  const handlePinkNoiseToggle = (value) => {
+    setPinkNoiseEnabled(value);
+    // If disabling pink noise, ensure the dropdown is hidden
+    if (!value) {
+      console.log('Pink noise disabled, hiding dropdown');
+    } else {
+      console.log('Pink noise enabled, showing dropdown');
+    }
+  };
+
+  // Handle noise cancellation toggle
+  const handleNoiseCancellationToggle = (value) => {
+    setNoiseCancellation(value);
+    console.log('Noise cancellation toggled:', value);
+  };
   
   return(
     <div style={{textAlign:'left'}}>
@@ -130,6 +168,80 @@ function Settings() {
         <div className="range-info">
           Range: {TIMER_SETTINGS.BREAK_MIN_MINUTES}-{TIMER_SETTINGS.BREAK_MAX_MINUTES} minutes
         </div>
+      </div>
+      
+      <div className="setting-group">
+        <div className="toggle-container">
+          <label htmlFor="noiseCancellation" onClick={() => handleNoiseCancellationToggle(!noiseCancellation)}>
+            Noise Cancellation
+          </label>
+          <div 
+            className="toggle-switch" 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleNoiseCancellationToggle(!noiseCancellation);
+            }}
+          >
+            <input
+              type="checkbox"
+              id="noiseCancellation"
+              checked={noiseCancellation}
+              onChange={(e) => {
+                e.stopPropagation();
+                handleNoiseCancellationToggle(e.target.checked);
+              }}
+            />
+            <span className="toggle-slider"></span>
+          </div>
+        </div>
+        <div className="setting-description">
+          Enable noise cancellation to reduce background noise during focus sessions
+        </div>
+      </div>
+      
+      <div className="setting-group">
+        <div className="toggle-container">
+          <label htmlFor="pinkNoiseEnabled" onClick={() => handlePinkNoiseToggle(!pinkNoiseEnabled)}>
+            Pink Noise
+          </label>
+          <div 
+            className="toggle-switch" 
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePinkNoiseToggle(!pinkNoiseEnabled);
+            }}
+          >
+            <input
+              type="checkbox"
+              id="pinkNoiseEnabled"
+              checked={pinkNoiseEnabled}
+              onChange={(e) => {
+                e.stopPropagation();
+                handlePinkNoiseToggle(e.target.checked);
+              }}
+            />
+            <span className="toggle-slider"></span>
+          </div>
+        </div>
+        <div className="setting-description">
+          Enable pink noise to help maintain focus and mask distractions
+        </div>
+        
+        {pinkNoiseEnabled && (
+          <div className="noise-type-selector">
+            <label htmlFor="pinkNoiseType">Pink Noise Type</label>
+            <select
+              id="pinkNoiseType"
+              value={pinkNoiseType}
+              onChange={(e) => setPinkNoiseType(e.target.value)}
+              className="select-dropdown"
+            >
+              {PINK_NOISE_TYPES.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       
       {saveStatus && (
@@ -216,6 +328,110 @@ function Settings() {
           margin-top: 5px;
           font-size: 12px;
           color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .toggle-container {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 10px;
+          position: relative;
+          z-index: 10;
+        }
+        
+        .toggle-container label {
+          cursor: pointer;
+          user-select: none;
+        }
+        
+        .toggle-switch {
+          position: relative;
+          display: inline-block;
+          width: 60px;
+          height: 34px;
+          z-index: 15;
+          cursor: pointer;
+        }
+        
+        .toggle-switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+          position: absolute;
+          cursor: pointer;
+          z-index: 20;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          width: 100%;
+          height: 100%;
+        }
+        
+        .toggle-slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(255, 255, 255, 0.1);
+          transition: .4s;
+          border-radius: 34px;
+          z-index: 5;
+          pointer-events: none;
+        }
+        
+        .toggle-slider:before {
+          position: absolute;
+          content: "";
+          height: 26px;
+          width: 26px;
+          left: 4px;
+          bottom: 4px;
+          background-color: white;
+          transition: .4s;
+          border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+          background-color: var(--green);
+        }
+        
+        input:checked + .toggle-slider:before {
+          transform: translateX(26px);
+        }
+        
+        .setting-description {
+          margin-top: 5px;
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .noise-type-selector {
+          margin-top: 15px;
+          position: relative;
+          z-index: 25;
+        }
+        
+        .select-dropdown {
+          width: 100%;
+          padding: 10px;
+          margin-top: 5px;
+          background-color: rgba(255, 255, 255, 0.1);
+          color: white;
+          border: none;
+          border-radius: 5px;
+          appearance: none;
+          cursor: pointer;
+          z-index: 30;
+          position: relative;
+        }
+        
+        .select-dropdown option {
+          background-color: #333;
+          color: white;
+          padding: 10px;
         }
       `}</style>
     </div>

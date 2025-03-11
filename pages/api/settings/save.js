@@ -1,4 +1,4 @@
-import { TIMER_SETTINGS } from '../../../utils/constants';
+import { TIMER_SETTINGS, PINK_NOISE_TYPES } from '../../../utils/constants';
 import { getServerSession } from 'next-auth';
 import dbConnect from '../../../lib/mongoose';
 import User from '../../../models/User';
@@ -26,7 +26,13 @@ export default async function handler(req, res) {
 
     await dbConnect();
 
-    const { workMinutes, breakMinutes } = req.body;
+    const { 
+      workMinutes, 
+      breakMinutes, 
+      noiseCancellation, 
+      pinkNoiseEnabled, 
+      pinkNoiseType 
+    } = req.body;
     
     // Validate input
     if (typeof workMinutes !== 'number' || typeof breakMinutes !== 'number') {
@@ -53,6 +59,23 @@ export default async function handler(req, res) {
       });
     }
     
+    // Validate noise cancellation
+    if (typeof noiseCancellation !== 'boolean') {
+      return res.status(400).json({ message: 'Noise cancellation must be a boolean' });
+    }
+    
+    // Validate pink noise enabled
+    if (typeof pinkNoiseEnabled !== 'boolean') {
+      return res.status(400).json({ message: 'Pink noise enabled must be a boolean' });
+    }
+    
+    // Validate pink noise type
+    if (pinkNoiseEnabled && !PINK_NOISE_TYPES.includes(pinkNoiseType)) {
+      return res.status(400).json({ 
+        message: `Pink noise type must be one of: ${PINK_NOISE_TYPES.join(', ')}` 
+      });
+    }
+    
     // Find user by username
     const user = await User.findOne({ username: session.user.name });
     
@@ -63,18 +86,27 @@ export default async function handler(req, res) {
     // Update user settings
     user.timerSettings = {
       workMinutes,
-      breakMinutes
+      breakMinutes,
+      noiseCancellation,
+      pinkNoiseEnabled,
+      pinkNoiseType
     };
     
     // Save updated user
     await user.save();
     
-    console.log(`Settings saved for user ${user.username}: Work=${workMinutes}, Break=${breakMinutes}`);
+    console.log(`Settings saved for user ${user.username}: Work=${workMinutes}, Break=${breakMinutes}, NoiseCancellation=${noiseCancellation}, PinkNoiseEnabled=${pinkNoiseEnabled}, PinkNoiseType=${pinkNoiseType}`);
     
     res.status(200).json({ 
       success: true,
       message: 'Settings saved successfully',
-      settings: { workMinutes, breakMinutes }
+      settings: { 
+        workMinutes, 
+        breakMinutes, 
+        noiseCancellation, 
+        pinkNoiseEnabled, 
+        pinkNoiseType 
+      }
     });
   } catch (error) {
     console.error('Error saving settings:', error);

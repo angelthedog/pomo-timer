@@ -1,5 +1,5 @@
 import { createContext, useState, useContext, useEffect } from 'react';
-import { TIMER_SETTINGS } from '../utils/constants';
+import { TIMER_SETTINGS, PINK_NOISE_TYPES } from '../utils/constants';
 import { useSession } from 'next-auth/react';
 import { fetchDefaultSettings } from '../utils/api';
 
@@ -16,6 +16,9 @@ export function SettingsProvider({ children }) {
   const [showSettings, setShowSettings] = useState(false);
   const [workMinutes, setWorkMinutes] = useState(GUEST_WORK_MINUTES);
   const [breakMinutes, setBreakMinutes] = useState(GUEST_BREAK_MINUTES);
+  const [noiseCancellation, setNoiseCancellation] = useState(false);
+  const [pinkNoiseEnabled, setPinkNoiseEnabled] = useState(false);
+  const [pinkNoiseType, setPinkNoiseType] = useState(PINK_NOISE_TYPES[0]);
   const [isLoading, setIsLoading] = useState(true);
   const [settingsChanged, setSettingsChanged] = useState(false);
 
@@ -28,10 +31,16 @@ export function SettingsProvider({ children }) {
       if (!isAuthenticated) {
         setWorkMinutes(GUEST_WORK_MINUTES);
         setBreakMinutes(GUEST_BREAK_MINUTES);
+        setNoiseCancellation(false);
+        setPinkNoiseEnabled(false);
+        setPinkNoiseType(PINK_NOISE_TYPES[0]);
         setIsLoading(false);
         console.log('Using default settings for guest:', { 
           workMinutes: GUEST_WORK_MINUTES, 
-          breakMinutes: GUEST_BREAK_MINUTES 
+          breakMinutes: GUEST_BREAK_MINUTES,
+          noiseCancellation: false,
+          pinkNoiseEnabled: false,
+          pinkNoiseType: PINK_NOISE_TYPES[0]
         });
         return;
       }
@@ -41,14 +50,23 @@ export function SettingsProvider({ children }) {
         if (settings) {
           setWorkMinutes(settings.workMinutes);
           setBreakMinutes(settings.breakMinutes);
+          setNoiseCancellation(settings.noiseCancellation || false);
+          setPinkNoiseEnabled(settings.pinkNoiseEnabled || false);
+          setPinkNoiseType(settings.pinkNoiseType || PINK_NOISE_TYPES[0]);
           console.log('Settings loaded for authenticated user:', settings);
         } else {
           // Fallback to defaults if API fails
           setWorkMinutes(TIMER_SETTINGS.DEFAULT_WORK_MINUTES);
           setBreakMinutes(TIMER_SETTINGS.DEFAULT_BREAK_MINUTES);
+          setNoiseCancellation(false);
+          setPinkNoiseEnabled(false);
+          setPinkNoiseType(PINK_NOISE_TYPES[0]);
           console.log('Using fallback settings:', { 
             workMinutes: TIMER_SETTINGS.DEFAULT_WORK_MINUTES, 
-            breakMinutes: TIMER_SETTINGS.DEFAULT_BREAK_MINUTES 
+            breakMinutes: TIMER_SETTINGS.DEFAULT_BREAK_MINUTES,
+            noiseCancellation: false,
+            pinkNoiseEnabled: false,
+            pinkNoiseType: PINK_NOISE_TYPES[0]
           });
         }
       } catch (error) {
@@ -56,6 +74,9 @@ export function SettingsProvider({ children }) {
         // Fallback to defaults if API fails
         setWorkMinutes(TIMER_SETTINGS.DEFAULT_WORK_MINUTES);
         setBreakMinutes(TIMER_SETTINGS.DEFAULT_BREAK_MINUTES);
+        setNoiseCancellation(false);
+        setPinkNoiseEnabled(false);
+        setPinkNoiseType(PINK_NOISE_TYPES[0]);
       } finally {
         setIsLoading(false);
       }
@@ -75,8 +96,14 @@ export function SettingsProvider({ children }) {
       setShowSettings,
       workMinutes,
       breakMinutes,
+      noiseCancellation,
+      pinkNoiseEnabled,
+      pinkNoiseType,
       setWorkMinutes,
       setBreakMinutes,
+      setNoiseCancellation,
+      setPinkNoiseEnabled,
+      setPinkNoiseType,
       isLoading,
       isAuthenticated,
       settingsChanged,

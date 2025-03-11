@@ -29,6 +29,19 @@ const UserSchema = new mongoose.Schema(
         type: Number,
         default: 15,
       },
+      noiseCancellation: {
+        type: Boolean,
+        default: false,
+      },
+      pinkNoiseEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      pinkNoiseType: {
+        type: String,
+        enum: ['Rainfall', 'Ocean waves', 'Wind', 'Rustling leaves', 'Heartbeat', 'Fire crackling'],
+        default: 'Rainfall',
+      },
     },
   },
   { timestamps: true }

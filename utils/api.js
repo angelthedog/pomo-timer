@@ -69,6 +69,9 @@ export const fetchDefaultSettings = async () => {
  * @param {Object} settings - The settings to save
  * @param {number} settings.workMinutes - Work duration in minutes
  * @param {number} settings.breakMinutes - Break duration in minutes
+ * @param {boolean} settings.noiseCancellation - Whether noise cancellation is enabled
+ * @param {boolean} settings.pinkNoiseEnabled - Whether pink noise is enabled
+ * @param {string} settings.pinkNoiseType - The type of pink noise
  * @returns {Promise<Object>} - The API response
  */
 export const saveSettings = async (settings) => {
