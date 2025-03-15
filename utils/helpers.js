@@ -25,12 +25,20 @@ export const formatTimeHM = (minutes) => {
 };
 
 /**
- * Calculate percentage of time elapsed
- * @param {number} current - Current value
- * @param {number} total - Total value
+ * Calculate percentage for timer display
+ * @param {number} current - Current value (seconds left)
+ * @param {number} total - Total value (total seconds)
  * @returns {number} - Percentage (0-100)
  */
 export const calculatePercentage = (current, total) => {
+  // For a timer, we want to show how much time is remaining as a percentage
+  // If current > total, something is wrong, so we cap at 100%
+  if (current > total) {
+    console.warn(`Invalid percentage calculation: current (${current}) > total (${total})`);
+    return 100;
+  }
+  
+  // Calculate percentage of time remaining
   return Math.round((current / total) * 100);
 };
 
