@@ -13,6 +13,7 @@ import { logTimerEvent } from '../utils/api';
 import { TIMER_MODES, TIMER_EVENTS, COLORS, UI } from '../utils/constants';
 import { formatTime, calculatePercentage, minutesToSeconds } from '../utils/helpers';
 import { useRouter } from 'next/router';
+import FeedbackModal from './FeedbackModal';
 
 // Default times for unauthenticated users
 const GUEST_WORK_MINUTES = 45;
@@ -35,6 +36,8 @@ function Timer() {
   const [previousUrl, setPreviousUrl] = useState('');
   const [prevAuthState, setPrevAuthState] = useState(authStatus);
   const [shouldAutoStart, setShouldAutoStart] = useState(true);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
   
   // Create a ref for the audio element
   const audioRef = useRef(null);
@@ -101,17 +104,40 @@ function Timer() {
   }, []);
 
   const handleTimerEvent = useCallback(async (event, mode, duration = null) => {
-    // Only log events if user is authenticated
-    if (isAuthenticated) {
-      try {
-        const result = await logTimerEvent(event, mode, duration);
-        console.log(`Timer event logged: ${event}`, result);
-        return result;
-      } catch (error) {
-        console.error('Error logging timer event:', error);
+    if (!isAuthenticated) return;
+    
+    try {
+      const timestamp = Date.now();
+      
+      const response = await fetch('/api/timer/log', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          event,
+          timestamp,
+          mode,
+          duration
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to log timer event');
       }
+      
+      const data = await response.json();
+      
+      // Store the session ID when a session is started
+      if (event === TIMER_EVENTS.STARTED) {
+        console.log('Session started with ID:', data.sessionId);
+        setCurrentSessionId(data.sessionId);
+      }
+      
+      console.log(`Timer event logged: ${event}`);
+    } catch (error) {
+      console.error('Error logging timer event:', error);
     }
-    return null;
   }, [isAuthenticated]);
 
   const startNewSession = useCallback(() => {
@@ -147,8 +173,11 @@ function Timer() {
     
     console.log(`Session completed: ${modeRef.current}, Duration: ${elapsedSeconds} seconds`);
     
-    // Play completion sound only if not skipping to next (natural completion)
-    // We've moved this to the timer tick effect to ensure it only plays when timer reaches zero naturally
+    // Show feedback modal only for work sessions
+    if (modeRef.current === TIMER_MODES.WORK && isAuthenticated) {
+      console.log('Showing feedback modal for session ID:', currentSessionId);
+      setShowFeedbackModal(true);
+    }
     
     // If skipping to next, don't auto-start the next session
     if (skipToNext) {
@@ -191,7 +220,7 @@ function Timer() {
       
       switchMode();
     }
-  }, [handleTimerEvent, modeRef, isAuthenticated, settingsInfo]);
+  }, [handleTimerEvent, modeRef, isAuthenticated, settingsInfo, currentSessionId]);
 
   const cancelCurrentSession = useCallback(() => {
     // Don't log the session, just reset the timer
@@ -1093,6 +1122,37 @@ function Timer() {
     }
   };
 
+  // Add this function to handle feedback submission
+  const handleFeedbackSubmit = async (sessionId, rating) => {
+    if (!isAuthenticated) return;
+    
+    try {
+      console.log(`Submitting feedback: ${rating} stars for session ${sessionId}`);
+      
+      const response = await fetch('/api/timer/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId,
+          feedback: rating
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error response:', errorData);
+        throw new Error('Failed to submit feedback');
+      }
+      
+      const data = await response.json();
+      console.log('Feedback submitted successfully:', data);
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+    }
+  };
+
   // Show loading state while settings are being loaded
   if (settingsInfo.isLoading) {
     return (
@@ -1216,6 +1276,14 @@ function Timer() {
           Sign in to access settings, stats, and custom timers
         </div>
       )}
+      
+      {/* Add the feedback modal */}
+      <FeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        onSubmit={handleFeedbackSubmit}
+        sessionId={currentSessionId}
+      />
       
       <style jsx>{`
         .auth-message {

@@ -28,6 +28,12 @@ const SessionSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    feedback: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: null,
+    },
     events: [
       {
         type: {

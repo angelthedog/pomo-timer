@@ -84,7 +84,7 @@ export default function Stats() {
       </Head>
 
       <div>
-        <h1>Your Pomodoro Statistics</h1>
+        <h1>Statistics</h1>
         
         {error && (
           <div style={{ color: COLORS.RED, marginBottom: '20px' }}>
@@ -105,7 +105,7 @@ export default function Stats() {
             </div>
             
             <div className="stat-card">
-              <h3>Average Work Session</h3>
+              <h3>Average Session Length</h3>
               <p className="stat-value">{formatTimeHM(stats.averageWorkSession)}</p>
             </div>
             
@@ -115,24 +115,107 @@ export default function Stats() {
               <p className="streak-info">Consecutive work sessions with less than 30 min breaks</p>
             </div>
             
+            <div className="stat-card">
+              <h3>Average Productivity Rating</h3>
+              <p className="stat-value feedback-value">
+                {stats.averageFeedback > 0 ? (
+                  <>
+                    {stats.averageFeedback} <span className="star-icon">★</span>
+                  </>
+                ) : (
+                  'No ratings yet'
+                )}
+              </p>
+            </div>
+            
+            <div className="stat-card">
+              <h3>Average Daily Work Time</h3>
+              <p className="stat-value">
+                {stats.dailyStats && stats.dailyStats.some(day => day.totalMinutes > 0) ? (
+                  formatTimeHM(
+                    Math.round(
+                      stats.dailyStats.reduce((sum, day) => sum + day.totalMinutes, 0) / 
+                      stats.dailyStats.filter(day => day.totalMinutes > 0).length * 60
+                    )
+                  )
+                ) : (
+                  '0h 0m'
+                )}
+              </p>
+            </div>
+            
             <div className="stat-card full-width">
               <h3>Last 7 Days (Work Sessions)</h3>
-              <div className="week-chart">
-                {stats.lastWeekSessions.map((count, index) => (
-                  <div key={index} className="day-bar">
-                    <div 
-                      className="bar" 
-                      style={{ 
-                        height: getBarHeight(count),
-                        backgroundColor: getBarColor(count)
-                      }}
-                    ></div>
-                    <div className="day-label">
-                      {DAYS[index]}
+              {stats.dailyStats ? (
+                <div className="daily-chart">
+                  {stats.dailyStats.map((day, index) => (
+                    <div key={index} className="day-column">
+                      <div className="bar-container">
+                        <div 
+                          className="session-bar" 
+                          style={{ 
+                            height: day.sessionsCount > 0 ? `${Math.min(100, day.sessionsCount * 20)}%` : '0%',
+                            opacity: day.sessionsCount > 0 ? 1 : 0.2
+                          }}
+                        >
+                          {day.sessionsCount > 0 && (
+                            <span className="count-label">
+                              {day.sessionsCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="day-info">
+                        <div className="day-label">
+                          {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                        </div>
+                        <div className="day-date">
+                          {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="no-data-message">No work sessions in the past week</p>
+              )}
+            </div>
+            
+            <div className="stat-card full-width">
+              <h3>Daily Productivity Ratings</h3>
+              {stats.dailyStats && stats.dailyStats.some(day => day.averageFeedback > 0) ? (
+                <div className="daily-chart">
+                  {stats.dailyStats.map((day, index) => (
+                    <div key={index} className="day-column">
+                      <div className="bar-container">
+                        <div 
+                          className="feedback-bar" 
+                          style={{ 
+                            height: day.averageFeedback > 0 ? `${day.averageFeedback * 20}%` : '0%',
+                            opacity: day.averageFeedback > 0 ? 1 : 0.2
+                          }}
+                        >
+                          {day.averageFeedback > 0 && (
+                            <span className="count-label">
+                              {day.averageFeedback}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="day-info">
+                        <div className="day-label">
+                          {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                        </div>
+                        <div className="day-date">
+                          {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="no-data-message">No productivity ratings available for the past week</p>
+              )}
             </div>
           </div>
         )}
@@ -238,6 +321,89 @@ export default function Stats() {
         
         .back-button:hover {
           background-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .feedback-value {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+        }
+        
+        .star-icon {
+          color: #FFD700;
+          font-size: 1.6rem;
+        }
+        
+        .daily-chart {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          height: 180px;
+          margin-top: 20px;
+        }
+        
+        .day-column {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          width: 12%;
+        }
+        
+        .bar-container {
+          height: 120px;
+          width: 100%;
+          display: flex;
+          align-items: flex-end;
+        }
+        
+        .session-bar {
+          width: 100%;
+          background-color: ${COLORS.GREEN};
+          border-radius: 4px 4px 0 0;
+          min-height: 4px;
+          position: relative;
+          transition: height 0.3s ease;
+        }
+        
+        .feedback-bar {
+          width: 100%;
+          background-color: #FFD700;
+          border-radius: 4px 4px 0 0;
+          min-height: 4px;
+          position: relative;
+          transition: height 0.3s ease;
+        }
+        
+        .count-label {
+          position: absolute;
+          top: -20px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 0.8rem;
+          color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .day-info {
+          margin-top: 8px;
+          text-align: center;
+        }
+        
+        .day-label {
+          font-size: 0.8rem;
+          color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .day-date {
+          font-size: 0.7rem;
+          color: rgba(255, 255, 255, 0.5);
+          margin-top: 2px;
+        }
+        
+        .no-data-message {
+          text-align: center;
+          color: rgba(255, 255, 255, 0.6);
+          margin: 30px 0;
         }
       `}</style>
     </>

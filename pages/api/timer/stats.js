@@ -70,20 +70,20 @@ export default async function handler(req, res) {
     }
 
     // Calculate sessions per day for the last 7 days
-    const lastWeekSessions = Array(7).fill(0);
     const today = new Date();
     today.setHours(23, 59, 59, 999); // End of today
-    
+
     const oneWeekAgo = new Date(today);
     oneWeekAgo.setDate(today.getDate() - 6);
     oneWeekAgo.setHours(0, 0, 0, 0); // Start of 7 days ago
-    
+
     // Filter sessions from the last 7 days
     const recentSessions = workSessions.filter(s => 
       new Date(s.startTime) >= oneWeekAgo && new Date(s.startTime) <= today
     );
-    
+
     // Count sessions for each day
+    const lastWeekSessions = Array(7).fill(0);
     recentSessions.forEach(s => {
       const sessionDate = new Date(s.startTime);
       const dayIndex = 6 - Math.floor((today - sessionDate) / (1000 * 60 * 60 * 24));
@@ -92,11 +92,56 @@ export default async function handler(req, res) {
       }
     });
 
+    // Calculate average feedback score
+    const sessionsWithFeedback = workSessions.filter(s => s.feedback !== null);
+    const averageFeedback = sessionsWithFeedback.length > 0
+      ? (sessionsWithFeedback.reduce((sum, s) => sum + s.feedback, 0) / sessionsWithFeedback.length).toFixed(1)
+      : 0;
+
+    // Get daily stats for the last 7 days
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      return date;
+    }).reverse();
+    
+    const dailyStats = last7Days.map(day => {
+      const nextDay = new Date(day);
+      nextDay.setDate(day.getDate() + 1);
+      
+      // Find sessions for this day
+      const daySessions = workSessions.filter(s => {
+        const sessionDate = new Date(s.startTime);
+        return sessionDate >= day && sessionDate < nextDay;
+      });
+      
+      // Calculate stats for this day
+      const sessionsCount = daySessions.length;
+      const totalMinutes = Math.round(daySessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 60);
+      
+      // Calculate average feedback for the day
+      const daySessionsWithFeedback = daySessions.filter(s => s.feedback !== null);
+      const dayAverageFeedback = daySessionsWithFeedback.length > 0
+        ? (daySessionsWithFeedback.reduce((sum, s) => sum + s.feedback, 0) / daySessionsWithFeedback.length).toFixed(1)
+        : 0;
+      
+      return {
+        date: day.toISOString().split('T')[0], // Format as YYYY-MM-DD
+        sessionsCount,
+        totalMinutes,
+        averageFeedback: dayAverageFeedback
+      };
+    });
+
     const stats = {
       totalWorkSessions,
       totalWorkTime,
       averageWorkSession,
       longestStreak,
+      currentStreak,
+      averageFeedback,
+      dailyStats,
       lastWeekSessions,
       user: session.user.name
     };
