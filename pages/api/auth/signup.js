@@ -9,11 +9,11 @@ export default async function handler(req, res) {
   try {
     await dbConnect();
 
-    const { username, password } = req.body;
+    const { username, displayName, password } = req.body;
 
     // Validate input
-    if (!username || !password) {
-      return res.status(400).json({ message: 'Username and password are required' });
+    if (!username || !password || !displayName) {
+      return res.status(400).json({ message: 'Username, display name, and password are required' });
     }
 
     if (password.length < 6) {
@@ -29,6 +29,7 @@ export default async function handler(req, res) {
     // Create new user
     const user = await User.create({
       username,
+      displayName,
       password,
       timerSettings: {
         workMinutes: 45,
@@ -41,7 +42,8 @@ export default async function handler(req, res) {
       success: true,
       user: {
         id: user._id,
-        username: user.username
+        username: user.username,
+        displayName: user.displayName
       }
     });
   } catch (error) {

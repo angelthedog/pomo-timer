@@ -1180,27 +1180,6 @@ function Timer() {
         Your browser does not support the audio element.
       </audio>
       
-      {/* Add a more visible test sound button */}
-      {process.env.NODE_ENV === 'development' && (
-        <button 
-          onClick={testSound} 
-          style={{
-            position: 'absolute', 
-            top: '10px', 
-            right: '10px', 
-            padding: '5px 10px',
-            background: '#333',
-            color: 'white',
-            border: '1px solid #666',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            zIndex: 1000
-          }}
-        >
-          Test Sound
-        </button>
-      )}
-      
       <CircularProgressbar
         value={percentage}
         text={timeDisplay}

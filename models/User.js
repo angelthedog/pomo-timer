@@ -10,6 +10,12 @@ const UserSchema = new mongoose.Schema(
       trim: true,
       maxlength: [60, 'Username cannot be more than 60 characters'],
     },
+    displayName: {
+      type: String,
+      required: false,
+      trim: true,
+      maxlength: [60, 'Display name cannot be more than 60 characters'],
+    },
     password: {
       type: String,
       required: [true, 'Please provide a password'],
@@ -49,6 +55,10 @@ const UserSchema = new mongoose.Schema(
 
 // Hash password before saving
 UserSchema.pre('save', async function(next) {
+  if (!this.displayName) {
+    this.displayName = this.username;
+  }
+  
   if (!this.isModified('password')) {
     next();
   }

@@ -1,10 +1,11 @@
 import ReactSlider from 'react-slider';
 import { useSettings } from '../contexts/SettingsContext';
 import BackButton from "./BackButton";
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchDefaultSettings, saveSettings as apiSaveSettings } from '../utils/api';
 import { COLORS, TIMER_SETTINGS, PINK_NOISE_TYPES, UI } from '../utils/constants';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/router';
 
 function Settings() {
   const settingsInfo = useSettings();
@@ -16,6 +17,7 @@ function Settings() {
   const [noiseCancellation, setNoiseCancellation] = useState(settingsInfo.noiseCancellation);
   const [pinkNoiseEnabled, setPinkNoiseEnabled] = useState(settingsInfo.pinkNoiseEnabled);
   const [pinkNoiseType, setPinkNoiseType] = useState(settingsInfo.pinkNoiseType);
+  const audioRef = useRef(null);
   
   // Load default settings from API
   useEffect(() => {
@@ -136,8 +138,42 @@ function Settings() {
     console.log('Noise cancellation toggled:', value);
   };
   
+  // Add a function to test the pink noise sound
+  const testPinkNoiseSound = useCallback(() => {
+    if (audioRef.current) {
+      // Try to play the specific pink noise sound
+      try {
+        // Set the source to the selected pink noise type
+        audioRef.current.src = `/sounds/${pinkNoiseType.toLowerCase().replace(/ /g, '_')}.mp3`;
+        audioRef.current.volume = 0.5;
+        
+        // Play the sound
+        audioRef.current.play()
+          .then(() => console.log(`Pink noise sound (${pinkNoiseType}) played successfully`))
+          .catch(err => {
+            console.error(`Error playing pink noise sound (${pinkNoiseType}):`, err);
+            // Fallback to complete.mp3 if the specific pink noise file doesn't exist
+            audioRef.current.src = '/sounds/complete.mp3';
+            audioRef.current.play()
+              .then(() => console.log('Fallback sound played successfully'))
+              .catch(fallbackErr => console.error('Error playing fallback sound:', fallbackErr));
+          });
+      } catch (error) {
+        console.error('Error setting up audio:', error);
+      }
+    } else {
+      console.error('Audio element not available');
+    }
+  }, [pinkNoiseType]);
+
   return(
     <div style={{textAlign:'left'}}>
+      {/* Hidden audio element for playing sounds */}
+      <audio ref={audioRef} preload="auto">
+        <source src="/sounds/complete.mp3" type="audio/mpeg" />
+        Your browser does not support the audio element.
+      </audio>
+      
       <div className="setting-group">
         <label htmlFor="workMinutes">Work Minutes: {workMinutes}</label>
         <input
@@ -240,6 +276,17 @@ function Settings() {
                 <option key={type} value={type}>{type}</option>
               ))}
             </select>
+            
+            {/* Add test sound button - only show when a pink noise type is selected */}
+            {pinkNoiseType && (
+              <button 
+                onClick={testPinkNoiseSound}
+                className="test-sound-button"
+                aria-label="Test pink noise sound"
+              >
+                <span className="sound-icon">🔊</span> Test Sound
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -426,12 +473,40 @@ function Settings() {
           cursor: pointer;
           z-index: 30;
           position: relative;
+          font-size: 14px;
         }
         
         .select-dropdown option {
           background-color: #333;
           color: white;
           padding: 10px;
+        }
+        
+        .test-sound-button {
+          margin-top: 10px;
+          padding: 8px 12px;
+          background-color: rgba(0, 0, 0, 0.3);
+          color: white;
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          font-size: 14px;
+          width: 100%;
+        }
+        
+        .test-sound-button:hover {
+          background-color: rgba(0, 0, 0, 0.5);
+          border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .test-sound-button:active {
+          transform: scale(0.98);
+        }
+        
+        .sound-icon {
+          margin-right: 5px;
+          font-size: 16px;
         }
       `}</style>
     </div>

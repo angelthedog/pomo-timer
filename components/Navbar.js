@@ -1,10 +1,21 @@
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 
 function Navbar() {
   const { data: session } = useSession();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const router = useRouter();
+
+  // Log session data for debugging
+  useEffect(() => {
+    if (session) {
+      console.log('Navbar session:', session);
+      console.log('Navbar displayName:', session.user.displayName);
+      console.log('Navbar name:', session.user.name);
+    }
+  }, [session]);
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -22,6 +33,13 @@ function Navbar() {
     signOut({ callbackUrl: '/' });
   };
 
+  const handleProfileClick = () => {
+    router.push('/profile');
+  };
+
+  // Get display name from session
+  const displayName = session?.user?.displayName || session?.user?.name || '';
+
   return (
     <nav className="navbar">
       <div className="navbar-brand">
@@ -31,8 +49,14 @@ function Navbar() {
       <div className="navbar-menu">
         {session ? (
           <>
-            <span className="welcome-text">Welcome, {session.user.name}</span>
+            <span className="welcome-text">Welcome, {displayName}</span>
             <div className="auth-buttons">
+              <button 
+                className="profile-button" 
+                onClick={handleProfileClick}
+              >
+                Profile
+              </button>
               <button 
                 className="signout-button" 
                 onClick={handleSignOut}
@@ -71,7 +95,13 @@ function Navbar() {
         <div className="mobile-menu">
           {session ? (
             <>
-              <span className="welcome-text">Welcome, {session.user.name}</span>
+              <span className="welcome-text">Welcome, {displayName}</span>
+              <button 
+                className="profile-button" 
+                onClick={handleProfileClick}
+              >
+                Profile
+              </button>
               <button 
                 className="signout-button" 
                 onClick={handleSignOut}

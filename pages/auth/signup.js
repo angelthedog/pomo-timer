@@ -6,6 +6,7 @@ import Head from 'next/head';
 
 export default function SignUp() {
   const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,7 +16,7 @@ export default function SignUp() {
     e.preventDefault();
     
     // Validate form
-    if (!username || !password) {
+    if (!username || !password || !displayName) {
       setError('Please fill in all fields');
       return;
     }
@@ -29,7 +30,7 @@ export default function SignUp() {
       setLoading(true);
       setError('');
       
-      console.log('Signing up with:', { username, password });
+      console.log('Signing up with:', { username, displayName, password });
       
       // Register user
       const res = await fetch('/api/auth/signup', {
@@ -39,6 +40,7 @@ export default function SignUp() {
         },
         body: JSON.stringify({
           username,
+          displayName,
           password,
         }),
       });
@@ -96,6 +98,19 @@ export default function SignUp() {
                 placeholder="Enter your username"
                 required
               />
+            </div>
+            
+            <div className="form-group">
+              <label htmlFor="displayName">Display Name</label>
+              <input
+                type="text"
+                id="displayName"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Enter your display name"
+                required
+              />
+              <small>This is how you'll be identified in the app</small>
             </div>
             
             <div className="form-group">

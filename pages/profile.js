@@ -4,21 +4,27 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 
 export default function Profile() {
-  const { data: session, status } = useSession();
   const router = useRouter();
-  const [username, setUsername] = useState('');
+  const { data: session, status, update } = useSession({
+    required: true,
+    onUnauthenticated() {
+      router.push('/auth/signin');
+    },
+  });
+  const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.replace('/auth/signin');
-    }
-
+    console.log('Session status:', status);
+    console.log('Session data:', session);
+    
     if (session?.user) {
-      setUsername(session.user.name);
+      console.log('Current displayName from session:', session.user.displayName);
+      console.log('Current name from session:', session.user.name);
+      setDisplayName(session.user.displayName || session.user.name || '');
     }
-  }, [session, status, router]);
+  }, [session, status]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,22 +38,47 @@ export default function Profile() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username,
+          displayName,
         }),
       });
 
       const data = await res.json();
+      console.log('Update response:', data);
 
       if (res.ok) {
         setMessage({ type: 'success', text: 'Profile updated successfully!' });
+        
+        // Update the session with the new display name
+        // This will trigger the jwt callback with trigger="update"
+        try {
+          console.log('Updating session with new displayName:', displayName);
+          await update({
+            user: {
+              displayName: displayName
+            }
+          });
+          console.log('Session update completed');
+        } catch (error) {
+          console.error('Error updating session:', error);
+        }
+        
+        // Redirect to the main page after a short delay
+        setTimeout(() => {
+          router.push('/');
+        }, 1500);
       } else {
         setMessage({ type: 'error', text: data.message || 'Failed to update profile' });
       }
     } catch (error) {
+      console.error('Update error:', error);
       setMessage({ type: 'error', text: 'An error occurred. Please try again.' });
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancel = () => {
+    router.push('/');
   };
 
   if (status === 'loading') {
@@ -72,24 +103,33 @@ export default function Profile() {
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label htmlFor="username">Username</label>
+              <label htmlFor="displayName">Display Name</label>
               <input
                 type="text"
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                id="displayName"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
                 required
               />
               <small>This is how you'll be identified in the app</small>
             </div>
 
-            <button
-              type="submit"
-              className="submit-button"
-              disabled={loading}
-            >
-              {loading ? 'Updating...' : 'Update Profile'}
-            </button>
+            <div className="button-group">
+              <button
+                type="button"
+                className="cancel-button"
+                onClick={handleCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="submit-button"
+                disabled={loading}
+              >
+                {loading ? 'Updating...' : 'Update Profile'}
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -166,8 +206,13 @@ export default function Profile() {
           font-size: 0.8rem;
         }
 
+        .button-group {
+          display: flex;
+          gap: 1rem;
+        }
+
         .submit-button {
-          width: 100%;
+          flex: 1;
           padding: 0.75rem;
           background-color: #4aec8c;
           color: #30384b;
@@ -179,8 +224,24 @@ export default function Profile() {
           transition: background-color 0.3s ease;
         }
 
+        .cancel-button {
+          flex: 1;
+          padding: 0.75rem;
+          background-color: transparent;
+          color: white;
+          border: 1px solid rgba(255, 255, 255, 0.5);
+          border-radius: 4px;
+          font-size: 1rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
         .submit-button:hover {
           background-color: #3dd67a;
+        }
+
+        .cancel-button:hover {
+          background-color: rgba(255, 255, 255, 0.1);
         }
 
         .submit-button:disabled {

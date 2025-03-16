@@ -123,7 +123,7 @@ export default function Stats() {
                     {stats.averageFeedback} <span className="star-icon">★</span>
                   </>
                 ) : (
-                  'No ratings yet'
+                  '--'
                 )}
               </p>
             </div>
@@ -177,7 +177,7 @@ export default function Stats() {
                   ))}
                 </div>
               ) : (
-                <p className="no-data-message">No work sessions in the past week</p>
+                <p className="no-data-message">--</p>
               )}
             </div>
             
@@ -214,7 +214,7 @@ export default function Stats() {
                   ))}
                 </div>
               ) : (
-                <p className="no-data-message">No productivity ratings available for the past week</p>
+                <p className="no-data-message">--</p>
               )}
             </div>
           </div>
