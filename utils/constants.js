@@ -42,7 +42,7 @@ export const UI = {
   TICK_INTERVAL: 1000 // ms
 };
 
-// Pink noise types
+// Pink noise types and their corresponding S3 URLs
 export const PINK_NOISE_TYPES = [
   'Rainfall',
   'Ocean waves',
@@ -50,4 +50,13 @@ export const PINK_NOISE_TYPES = [
   'Rustling leaves',
   'Heartbeat',
   'Fire crackling'
-]; 
+];
+
+export const PINK_NOISE_URLS = {
+  'Rainfall': 'https://focusmindpinknoise.s3.us-east-2.amazonaws.com/relaxing-rain-sound-195625.mp3',
+  'Ocean waves': 'https://focusmindpinknoise.s3.us-east-2.amazonaws.com/ocean-lake-sea-shore-waves-18921.mp3',
+  'Wind': 'https://focusmindpinknoise.s3.us-east-2.amazonaws.com/wind-18030.mp3',
+  'Rustling leaves': 'https://focusmindpinknoise.s3.us-east-2.amazonaws.com/leaves-rustling-14633.mp3',
+  'Heartbeat': 'https://focusmindpinknoise.s3.us-east-2.amazonaws.com/heartbeat.mp3',
+  'Fire crackling': 'https://focusmindpinknoise.s3.us-east-2.amazonaws.com/fierce-crackling-fire-5-minutes-looped-135533.mp3'
+};
