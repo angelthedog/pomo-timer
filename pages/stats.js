@@ -145,36 +145,45 @@ export default function Stats() {
             </div>
             
             <div className="stat-card full-width">
-              <h3>Last 7 Days (Work Sessions)</h3>
+              <h3>Last 6 Days (Work Sessions)</h3>
               {stats.dailyStats ? (
                 <div className="daily-chart">
-                  {stats.dailyStats.map((day, index) => (
-                    <div key={index} className="day-column">
-                      <div className="bar-container">
-                        <div 
-                          className="session-bar" 
-                          style={{ 
-                            height: day.sessionsCount > 0 ? `${Math.min(100, day.sessionsCount * 20)}%` : '0%',
-                            opacity: day.sessionsCount > 0 ? 1 : 0.2
-                          }}
-                        >
-                          {day.sessionsCount > 0 && (
-                            <span className="count-label">
-                              {day.sessionsCount}
-                            </span>
-                          )}
+                  {stats.dailyStats.map((day, index) => {
+                    // Calculate bar height based on session count
+                    const maxSessions = Math.max(...stats.dailyStats.map(d => d.sessionsCount));
+                    const barHeight = maxSessions > 0 
+                      ? `${(day.sessionsCount / maxSessions) * 100}%` 
+                      : '0%';
+                    
+                    return (
+                      <div key={index} className="day-column">
+                        <div className="bar-container">
+                          <div 
+                            className="session-bar" 
+                            style={{ 
+                              height: barHeight,
+                              opacity: day.sessionsCount > 0 ? 1 : 0.2,
+                              backgroundColor: COLORS.GREEN
+                            }}
+                          >
+                            {day.sessionsCount > 0 && (
+                              <span className="count-label">
+                                {day.sessionsCount}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="day-info">
+                          <div className="day-label">
+                            {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                          </div>
+                          <div className="day-date">
+                            {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </div>
                         </div>
                       </div>
-                      <div className="day-info">
-                        <div className="day-label">
-                          {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                        </div>
-                        <div className="day-date">
-                          {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="no-data-message">--</p>
@@ -182,36 +191,45 @@ export default function Stats() {
             </div>
             
             <div className="stat-card full-width">
-              <h3>Daily Productivity Ratings</h3>
+              <h3>Last 6 Days (Productivity Ratings)</h3>
               {stats.dailyStats && stats.dailyStats.some(day => day.averageFeedback > 0) ? (
                 <div className="daily-chart">
-                  {stats.dailyStats.map((day, index) => (
-                    <div key={index} className="day-column">
-                      <div className="bar-container">
-                        <div 
-                          className="feedback-bar" 
-                          style={{ 
-                            height: day.averageFeedback > 0 ? `${day.averageFeedback * 20}%` : '0%',
-                            opacity: day.averageFeedback > 0 ? 1 : 0.2
-                          }}
-                        >
-                          {day.averageFeedback > 0 && (
-                            <span className="count-label">
-                              {day.averageFeedback}
-                            </span>
-                          )}
+                  {stats.dailyStats.map((day, index) => {
+                    // Calculate bar height based on average feedback
+                    const maxFeedback = Math.max(...stats.dailyStats.map(d => d.averageFeedback || 0));
+                    const barHeight = maxFeedback > 0 
+                      ? `${((day.averageFeedback || 0) / maxFeedback) * 100}%` 
+                      : '0%';
+                    
+                    return (
+                      <div key={index} className="day-column">
+                        <div className="bar-container">
+                          <div 
+                            className="feedback-bar" 
+                            style={{ 
+                              height: barHeight,
+                              opacity: day.averageFeedback > 0 ? 1 : 0.2,
+                              backgroundColor: '#FFD700'
+                            }}
+                          >
+                            {day.averageFeedback > 0 && (
+                              <span className="count-label">
+                                {day.averageFeedback}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="day-info">
+                          <div className="day-label">
+                            {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                          </div>
+                          <div className="day-date">
+                            {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </div>
                         </div>
                       </div>
-                      <div className="day-info">
-                        <div className="day-label">
-                          {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                        </div>
-                        <div className="day-date">
-                          {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="no-data-message">--</p>

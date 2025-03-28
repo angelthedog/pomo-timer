@@ -3,9 +3,12 @@ import { useSettings } from '../contexts/SettingsContext';
 import BackButton from "./BackButton";
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchDefaultSettings, saveSettings as apiSaveSettings } from '../utils/api';
-import { COLORS, TIMER_SETTINGS, PINK_NOISE_TYPES, UI } from '../utils/constants';
+import { COLORS, TIMER_SETTINGS, PINK_NOISE_TYPES, PINK_NOISE_URLS, UI } from '../utils/constants';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
+
+// OR if UI doesn't exist in constants, define it directly in Settings
+const SOUND_TEST_DURATION = 10000; // 10 seconds in milliseconds
 
 function Settings() {
   const settingsInfo = useSettings();
@@ -17,7 +20,9 @@ function Settings() {
   const [noiseCancellation, setNoiseCancellation] = useState(settingsInfo.noiseCancellation);
   const [pinkNoiseEnabled, setPinkNoiseEnabled] = useState(settingsInfo.pinkNoiseEnabled);
   const [pinkNoiseType, setPinkNoiseType] = useState(settingsInfo.pinkNoiseType);
+  const [isTestPlaying, setIsTestPlaying] = useState(false);
   const audioRef = useRef(null);
+  const audioTimeoutRef = useRef(null);
   
   // Load default settings from API
   useEffect(() => {
@@ -52,8 +57,24 @@ function Settings() {
     loadDefaultSettings();
   }, [settingsInfo]);
   
-  // Save settings to API
+  // Move cleanupSound definition before saveSettings
+  const cleanupSound = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsTestPlaying(false);
+    }
+    if (audioTimeoutRef.current) {
+      clearTimeout(audioTimeoutRef.current);
+      audioTimeoutRef.current = null;
+    }
+  }, []);
+  
+  // Now saveSettings can use cleanupSound
   const saveSettings = useCallback(async () => {
+    // Clean up any playing sound before saving
+    cleanupSound();
+
     if (!session) {
       setSaveStatus({ 
         type: 'error', 
@@ -111,7 +132,7 @@ function Settings() {
     } finally {
       setIsSaving(false);
     }
-  }, [settingsInfo, workMinutes, breakMinutes, noiseCancellation, pinkNoiseEnabled, pinkNoiseType, session]);
+  }, [session, workMinutes, breakMinutes, noiseCancellation, pinkNoiseEnabled, pinkNoiseType, settingsInfo, cleanupSound]);
   
   const getStatusStyles = useCallback((type) => ({
     marginTop: '10px',
@@ -124,8 +145,9 @@ function Settings() {
   // Handle pink noise toggle
   const handlePinkNoiseToggle = (value) => {
     setPinkNoiseEnabled(value);
-    // If disabling pink noise, ensure the dropdown is hidden
+    // Clean up sound when disabling pink noise
     if (!value) {
+      cleanupSound();
       console.log('Pink noise disabled, hiding dropdown');
     } else {
       console.log('Pink noise enabled, showing dropdown');
@@ -138,33 +160,81 @@ function Settings() {
     console.log('Noise cancellation toggled:', value);
   };
   
-  // Add a function to test the pink noise sound
-  const testPinkNoiseSound = useCallback(() => {
-    if (audioRef.current) {
-      // Try to play the specific pink noise sound
-      try {
-        // Set the source to the selected pink noise type
-        audioRef.current.src = `/sounds/${pinkNoiseType.toLowerCase().replace(/ /g, '_')}.mp3`;
-        audioRef.current.volume = 0.5;
-        
-        // Play the sound
-        audioRef.current.play()
-          .then(() => console.log(`Pink noise sound (${pinkNoiseType}) played successfully`))
-          .catch(err => {
-            console.error(`Error playing pink noise sound (${pinkNoiseType}):`, err);
-            // Fallback to complete.mp3 if the specific pink noise file doesn't exist
-            audioRef.current.src = '/sounds/complete.mp3';
-            audioRef.current.play()
-              .then(() => console.log('Fallback sound played successfully'))
-              .catch(fallbackErr => console.error('Error playing fallback sound:', fallbackErr));
-          });
-      } catch (error) {
-        console.error('Error setting up audio:', error);
-      }
-    } else {
-      console.error('Audio element not available');
+  // Add this function to handle test sound playback
+  const handleTestSound = useCallback(() => {
+    // Clear any existing timeout
+    if (audioTimeoutRef.current) {
+      clearTimeout(audioTimeoutRef.current);
+      audioTimeoutRef.current = null;
     }
-  }, [pinkNoiseType]);
+
+    // Initialize audio if needed
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+
+    // If sound is already playing, stop it
+    if (isTestPlaying) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsTestPlaying(false);
+      return;
+    }
+
+    // Clean up previous audio state
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+
+    // Set up new audio with selected sound
+    const soundUrl = PINK_NOISE_URLS[pinkNoiseType];
+    audioRef.current.src = soundUrl;
+    
+    // Handle sound completion
+    audioRef.current.onended = () => {
+      setIsTestPlaying(false);
+      audioRef.current.currentTime = 0;
+    };
+
+    // Play the sound and set timeout
+    audioRef.current.play()
+      .then(() => {
+        setIsTestPlaying(true);
+        
+        // Use SOUND_TEST_DURATION instead of UI.TICK_INTERVAL
+        audioTimeoutRef.current = setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            setIsTestPlaying(false);
+          }
+        }, SOUND_TEST_DURATION);
+      })
+      .catch(err => console.error('Error playing test sound:', err));
+  }, [pinkNoiseType, isTestPlaying]);
+
+  // Add this handler for pink noise type change
+  const handlePinkNoiseTypeChange = (event) => {
+    // Stop any playing test sound when changing type
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsTestPlaying(false);
+    }
+    setPinkNoiseType(event.target.value);
+  };
+
+  // Update back button handler
+  const handleBack = () => {
+    cleanupSound();
+    settingsInfo.setShowSettings(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      // Use the cleanup function when component unmounts
+      cleanupSound();
+    };
+  }, [cleanupSound]);
 
   return(
     <div style={{textAlign:'left'}}>
@@ -265,28 +335,24 @@ function Settings() {
         
         {pinkNoiseEnabled && (
           <div className="noise-type-selector">
-            <label htmlFor="pinkNoiseType">Pink Noise Type</label>
-            <select
-              id="pinkNoiseType"
-              value={pinkNoiseType}
-              onChange={(e) => setPinkNoiseType(e.target.value)}
+            <label>Pink Noise Type</label>
+            <select 
               className="select-dropdown"
+              value={pinkNoiseType}
+              onChange={handlePinkNoiseTypeChange}
             >
-              {PINK_NOISE_TYPES.map((type) => (
+              {PINK_NOISE_TYPES.map(type => (
                 <option key={type} value={type}>{type}</option>
               ))}
             </select>
-            
-            {/* Add test sound button - only show when a pink noise type is selected */}
-            {pinkNoiseType && (
-              <button 
-                onClick={testPinkNoiseSound}
-                className="test-sound-button"
-                aria-label="Test pink noise sound"
-              >
-                <span className="sound-icon">🔊</span> Test Sound
-              </button>
-            )}
+            <button 
+              className="test-sound-button" 
+              onClick={handleTestSound}
+              disabled={!pinkNoiseEnabled}
+            >
+              <span className="sound-icon">🔊</span>
+              {isTestPlaying ? 'Stop Sound' : 'Test Sound'}
+            </button>
           </div>
         )}
       </div>
@@ -298,7 +364,7 @@ function Settings() {
       )}
       
       <div style={{textAlign:'center', marginTop:'20px', display: 'flex', justifyContent: 'space-between'}}>
-        <BackButton onClick={() => settingsInfo.setShowSettings(false)} />
+        <BackButton onClick={handleBack} />
         <button 
           className="with-text" 
           onClick={saveSettings}

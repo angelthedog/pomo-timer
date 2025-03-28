@@ -29,22 +29,26 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Get all completed work sessions for this user
+    // Get all work sessions for this user
     const workSessions = await Session.find({ 
       userId: user._id,
-      mode: TIMER_MODES.WORK,
-      completed: true
+      mode: TIMER_MODES.WORK
     });
 
-    // Calculate total work sessions
+    // Calculate total work sessions (including in-progress and paused)
     const totalWorkSessions = workSessions.length;
     
-    // Calculate total work time in minutes
-    const totalWorkTime = Math.round(workSessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 60);
+    // Calculate total work time in minutes (only for completed sessions)
+    const totalWorkTime = Math.round(
+      workSessions
+        .filter(s => s.completed)
+        .reduce((sum, s) => sum + (s.duration || 0), 0) / 60
+    );
     
-    // Calculate average work session duration in minutes
-    const averageWorkSession = workSessions.length > 0 
-      ? Math.round((totalWorkTime / workSessions.length)) 
+    // Calculate average work session duration in minutes (only for completed sessions)
+    const completedSessions = workSessions.filter(s => s.completed);
+    const averageWorkSession = completedSessions.length > 0 
+      ? Math.round((totalWorkTime / completedSessions.length)) 
       : 0;
 
     // Calculate longest streak (consecutive work sessions without long breaks)
@@ -92,8 +96,8 @@ export default async function handler(req, res) {
       }
     });
 
-    // Calculate average feedback score
-    const sessionsWithFeedback = workSessions.filter(s => s.feedback !== null);
+    // Calculate average feedback score (only for completed sessions with feedback)
+    const sessionsWithFeedback = completedSessions.filter(s => s.feedback !== null);
     const averageFeedback = sessionsWithFeedback.length > 0
       ? (sessionsWithFeedback.reduce((sum, s) => sum + s.feedback, 0) / sessionsWithFeedback.length).toFixed(1)
       : 0;
@@ -101,10 +105,10 @@ export default async function handler(req, res) {
     // Get daily stats for the last 7 days
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const date = new Date(today);
-      date.setDate(today.getDate() - i);
+      date.setDate(today.getDate() - (6 - i));
       date.setHours(0, 0, 0, 0);
       return date;
-    }).reverse();
+    });
     
     const dailyStats = last7Days.map(day => {
       const nextDay = new Date(day);
@@ -118,10 +122,14 @@ export default async function handler(req, res) {
       
       // Calculate stats for this day
       const sessionsCount = daySessions.length;
-      const totalMinutes = Math.round(daySessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 60);
+      const totalMinutes = Math.round(
+        daySessions
+          .filter(s => s.completed)
+          .reduce((sum, s) => sum + (s.duration || 0), 0) / 60
+      );
       
-      // Calculate average feedback for the day
-      const daySessionsWithFeedback = daySessions.filter(s => s.feedback !== null);
+      // Calculate average feedback for the day (only for completed sessions)
+      const daySessionsWithFeedback = daySessions.filter(s => s.completed && s.feedback !== null);
       const dayAverageFeedback = daySessionsWithFeedback.length > 0
         ? (daySessionsWithFeedback.reduce((sum, s) => sum + s.feedback, 0) / daySessionsWithFeedback.length).toFixed(1)
         : 0;
