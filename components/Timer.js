@@ -10,7 +10,7 @@ import CancelButton from "./CancelButton";
 import SettingsButton from "./SettingsButton";
 import StatsButton from "./StatsButton";
 import { logTimerEvent } from '../utils/api';
-import { TIMER_MODES, TIMER_EVENTS, COLORS, UI } from '../utils/constants';
+import { TIMER_MODES, TIMER_EVENTS, COLORS, UI, PINK_NOISE_URLS } from '../utils/constants';
 import { formatTime, calculatePercentage, minutesToSeconds } from '../utils/helpers';
 import { useRouter } from 'next/router';
 import FeedbackModal from './FeedbackModal';
@@ -28,14 +28,9 @@ function Timer() {
   const [isPaused, setIsPaused] = useState(true);
   const [mode, setMode] = useState(TIMER_MODES.WORK);
   const [secondsLeft, setSecondsLeft] = useState(0);
-  const [timerState, setTimerState] = useState({});
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [renderKey, setRenderKey] = useState(Date.now());
-  const [returningFromStats, setReturningFromStats] = useState(false);
-  const [previousUrl, setPreviousUrl] = useState('');
-  const [prevAuthState, setPrevAuthState] = useState(authStatus);
-  const [shouldAutoStart, setShouldAutoStart] = useState(true);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   
@@ -48,12 +43,14 @@ function Timer() {
   const modeRef = useRef(mode);
   const prevWorkMinutesRef = useRef(settingsInfo.workMinutes);
   const prevBreakMinutesRef = useRef(settingsInfo.breakMinutes);
-  const timerStateRef = useRef({});
   const sessionStartTimeRef = useRef(null);
   const isTimerActiveRef = useRef(false);
-  const shouldAutoStartRef = useRef(true);
 
-  // Add a function to test the sound - moved to the top with other hooks
+  // Add these refs for pink noise
+  const pinkNoiseRef = useRef(null);
+  const isPinkNoisePlayingRef = useRef(false);
+
+  // Add a function to test the sound
   const testSound = useCallback(() => {
     if (audioRef.current) {
       console.log('Testing sound playback');
@@ -66,7 +63,7 @@ function Timer() {
     }
   }, []);
 
-  // Add an effect to initialize the audio element - moved to the top with other hooks
+  // Add an effect to initialize the audio element
   useEffect(() => {
     // Initialize audio when component mounts
     if (audioRef.current) {
@@ -162,6 +159,9 @@ function Timer() {
     // Calculate elapsed time
     const elapsedSeconds = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
     
+    // Store the current session ID if it's a work session
+    const workSessionId = modeRef.current === TIMER_MODES.WORK ? currentSessionId : null;
+    
     // Log completion with actual duration if authenticated
     if (isAuthenticated) {
       handleTimerEvent(TIMER_EVENTS.COMPLETED, modeRef.current, elapsedSeconds);
@@ -175,52 +175,17 @@ function Timer() {
     
     // Show feedback modal only for work sessions
     if (modeRef.current === TIMER_MODES.WORK && isAuthenticated) {
-      console.log('Showing feedback modal for session ID:', currentSessionId);
+      console.log('Showing feedback modal for work session ID:', workSessionId);
       setShowFeedbackModal(true);
+      // Store the work session ID for feedback
+      setCurrentSessionId(workSessionId);
+      // Don't switch mode yet - wait for feedback to be submitted
+      return;
     }
     
-    // If skipping to next, don't auto-start the next session
-    if (skipToNext) {
-      console.log('Skipping to next session without auto-starting');
-      setShouldAutoStart(false);
-      shouldAutoStartRef.current = false;
-      
-      // Ensure we have the latest settings before switching
-      if (isAuthenticated) {
-        console.log('Using authenticated settings:', {
-          workMinutes: settingsInfo.workMinutes,
-          breakMinutes: settingsInfo.breakMinutes
-        });
-      } else {
-        console.log('Using guest settings:', {
-          workMinutes: GUEST_WORK_MINUTES,
-          breakMinutes: GUEST_BREAK_MINUTES
-        });
-      }
-      
-      switchMode();
-    } else {
-      // Normal completion - auto-start next session
-      console.log('Normal completion, auto-starting next session');
-      setShouldAutoStart(true);
-      shouldAutoStartRef.current = true;
-      
-      // Ensure we have the latest settings before switching
-      if (isAuthenticated) {
-        console.log('Using authenticated settings:', {
-          workMinutes: settingsInfo.workMinutes,
-          breakMinutes: settingsInfo.breakMinutes
-        });
-      } else {
-        console.log('Using guest settings:', {
-          workMinutes: GUEST_WORK_MINUTES,
-          breakMinutes: GUEST_BREAK_MINUTES
-        });
-      }
-      
-      switchMode();
-    }
-  }, [handleTimerEvent, modeRef, isAuthenticated, settingsInfo, currentSessionId]);
+    // Switch mode and start next session
+    switchMode();
+  }, [handleTimerEvent, modeRef, isAuthenticated, currentSessionId]);
 
   const cancelCurrentSession = useCallback(() => {
     // Don't log the session, just reset the timer
@@ -245,18 +210,14 @@ function Timer() {
     // Mark timer as inactive
     setIsTimerActive(false);
     isTimerActiveRef.current = false;
-    
-    // Don't auto-start after cancellation
-    setShouldAutoStart(false);
-    shouldAutoStartRef.current = false;
+
+    // Stop pink noise
+    handlePinkNoisePlayback(false);
   }, [settingsInfo]);
 
   const resetTimer = useCallback(() => {
     // Complete current session if one is in progress
     if (sessionStartTimeRef.current && !isPausedRef.current) {
-      // We need to be careful not to create circular dependencies
-      // So we'll manually complete the session without calling completeCurrentSession
-      
       // Calculate elapsed time
       const elapsedSeconds = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
       
@@ -270,8 +231,6 @@ function Timer() {
       sessionStartTimeRef.current = null;
       
       console.log(`Session completed during reset: ${modeRef.current}, Duration: ${elapsedSeconds} seconds`);
-      
-      // Note: We don't play the completion sound here since this is a manual reset
     }
     
     // Reset timer to current mode with new duration
@@ -279,8 +238,6 @@ function Timer() {
       modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
     );
     
-    // IMPORTANT: Set the current time to the full duration
-    // This ensures the red portion of the circle is reset to match the total time
     setSecondsLeft(newSeconds);
     secondsLeftRef.current = newSeconds;
     
@@ -327,23 +284,12 @@ function Timer() {
     setSecondsLeft(nextSeconds);
     secondsLeftRef.current = nextSeconds;
     
-    // If shouldAutoStart is true, start the next session automatically
-    if (shouldAutoStartRef.current) {
-      // Start new session for next mode
-      startNewSession();
-      
-      // Unpause the timer to start automatically
-      setIsPaused(false);
-      isPausedRef.current = false;
-    } else {
-      // Don't auto-start, just prepare the timer
-      setIsPaused(true);
-      isPausedRef.current = true;
-      
-      // Reset shouldAutoStart for next time
-      setShouldAutoStart(true);
-      shouldAutoStartRef.current = true;
-    }
+    // Start new session for next mode
+    startNewSession();
+    
+    // Unpause the timer to start automatically
+    setIsPaused(false);
+    isPausedRef.current = false;
     
     // Force a re-render to update the UI with the new mode and time
     setRenderKey(Date.now());
@@ -360,6 +306,9 @@ function Timer() {
     setIsPaused(true);
     isPausedRef.current = true;
     console.log('Timer skipped, enabling Settings and Stats buttons');
+
+    // Stop pink noise
+    handlePinkNoisePlayback(false);
   }, [completeCurrentSession]);
 
   // Cancel current session
@@ -379,12 +328,8 @@ function Timer() {
       secondsLeft: secondsLeftRef.current,
       sessionStartTime: sessionStartTimeRef.current,
       isTimerActive: isTimerActiveRef.current,
-      shouldAutoStart: shouldAutoStartRef.current,
       timestamp: Date.now()
     };
-    
-    setTimerState(state);
-    timerStateRef.current = state;
     
     // Store in localStorage as fallback
     if (typeof window !== 'undefined') {
@@ -398,292 +343,91 @@ function Timer() {
 
   // Restore timer state when returning to the page
   const restoreTimerState = useCallback(() => {
-    let state = timerStateRef.current;
-    
-    // Try to get from localStorage if not in memory
-    if (!state || Object.keys(state).length === 0) {
-      try {
-        const savedState = localStorage.getItem('timerState');
-        if (savedState) {
-          state = JSON.parse(savedState);
-        }
-      } catch (error) {
-        console.error('Error restoring timer state:', error);
-      }
-    }
-    
-    if (state && Object.keys(state).length > 0) {
-      // Check if state is still valid (not too old)
-      const elapsed = (Date.now() - state.timestamp) / 1000;
-      
-      if (elapsed < 3600) { // Only restore if less than 1 hour old
-        // Restore mode
-        setMode(state.mode);
-        modeRef.current = state.mode;
+    try {
+      const savedState = localStorage.getItem('timerState');
+      if (savedState) {
+        const state = JSON.parse(savedState);
         
-        // If timer was running, subtract elapsed time
-        if (!state.isPaused && state.sessionStartTime) {
-          // Calculate how many seconds have passed since the state was saved
-          const secondsElapsed = Math.floor(elapsed);
-          const adjustedSecondsLeft = Math.max(0, state.secondsLeft - secondsElapsed);
+        // Check if state is still valid (not too old)
+        const elapsed = (Date.now() - state.timestamp) / 1000;
+        
+        if (elapsed < 3600) { // Only restore if less than 1 hour old
+          // Restore mode
+          setMode(state.mode);
+          modeRef.current = state.mode;
           
-          console.log(`Timer was running, adjusted time by ${secondsElapsed} seconds. New time: ${adjustedSecondsLeft}`);
-          
-          // If timer reached zero while away, handle session completion
-          if (adjustedSecondsLeft === 0) {
-            // Complete the session that ended while away
-            // Note: We don't play the completion sound here since the user wasn't present
-            console.log('Timer completed while page was hidden, not playing sound');
-            completeCurrentSession();
-            return; // Exit early as completeCurrentSession will handle the mode switch
-          }
-          
-          // Update seconds left
-          setSecondsLeft(adjustedSecondsLeft);
-          secondsLeftRef.current = adjustedSecondsLeft;
-          
-          // Ensure the timer stays unpaused when returning
-          setIsPaused(false);
-          isPausedRef.current = false;
-          
-          // Restore session start time - keep the original start time
-          if (state.sessionStartTime) {
-            setSessionStartTime(state.sessionStartTime);
-            sessionStartTimeRef.current = state.sessionStartTime;
+          // If timer was running, subtract elapsed time
+          if (!state.isPaused && state.sessionStartTime) {
+            // Calculate how many seconds have passed since the state was saved
+            const secondsElapsed = Math.floor(elapsed);
+            const adjustedSecondsLeft = Math.max(0, state.secondsLeft - secondsElapsed);
             
-            // Mark timer as active
-            setIsTimerActive(true);
-            isTimerActiveRef.current = true;
-          }
-        } else {
-          // Timer was paused, restore exact seconds
-          setSecondsLeft(state.secondsLeft);
-          secondsLeftRef.current = state.secondsLeft;
-          
-          // Restore pause state
-          setIsPaused(state.isPaused);
-          isPausedRef.current = state.isPaused;
-          
-          // Restore session start time if there was one
-          if (state.sessionStartTime) {
-            setSessionStartTime(state.sessionStartTime);
-            sessionStartTimeRef.current = state.sessionStartTime;
+            console.log(`Timer was running, adjusted time by ${secondsElapsed} seconds. New time: ${adjustedSecondsLeft}`);
             
-            // Mark timer as active
-            setIsTimerActive(true);
-            isTimerActiveRef.current = true;
+            // If timer reached zero while away, handle session completion
+            if (adjustedSecondsLeft === 0) {
+              console.log('Timer completed while page was hidden, not playing sound');
+              completeCurrentSession();
+              return; // Exit early as completeCurrentSession will handle the mode switch
+            }
+            
+            // Update seconds left
+            setSecondsLeft(adjustedSecondsLeft);
+            secondsLeftRef.current = adjustedSecondsLeft;
+            
+            // Ensure the timer stays unpaused when returning
+            setIsPaused(false);
+            isPausedRef.current = false;
+            
+            // Restore session start time - keep the original start time
+            if (state.sessionStartTime) {
+              setSessionStartTime(state.sessionStartTime);
+              sessionStartTimeRef.current = state.sessionStartTime;
+              
+              // Mark timer as active
+              setIsTimerActive(true);
+              isTimerActiveRef.current = true;
+            }
           } else {
-            // No active session
-            setIsTimerActive(false);
-            isTimerActiveRef.current = false;
+            // Timer was paused, restore exact seconds
+            setSecondsLeft(state.secondsLeft);
+            secondsLeftRef.current = state.secondsLeft;
+            
+            // Restore pause state
+            setIsPaused(state.isPaused);
+            isPausedRef.current = state.isPaused;
+            
+            // Restore session start time if there was one
+            if (state.sessionStartTime) {
+              setSessionStartTime(state.sessionStartTime);
+              sessionStartTimeRef.current = state.sessionStartTime;
+              
+              // Mark timer as active
+              setIsTimerActive(true);
+              isTimerActiveRef.current = true;
+            } else {
+              // No active session
+              setIsTimerActive(false);
+              isTimerActiveRef.current = false;
+            }
           }
-        }
-        
-        // Restore auto-start preference
-        setShouldAutoStart(state.shouldAutoStart !== undefined ? state.shouldAutoStart : true);
-        shouldAutoStartRef.current = state.shouldAutoStart !== undefined ? state.shouldAutoStart : true;
-        
-        // Force a re-render to update the UI
-        setRenderKey(Date.now());
-        
-        console.log('Timer state restored:', { 
-          mode: state.mode, 
-          secondsLeft: secondsLeftRef.current,
-          isPaused: isPausedRef.current,
-          sessionStartTime: state.sessionStartTime,
-          isTimerActive: state.isTimerActive,
-          shouldAutoStart: shouldAutoStartRef.current
-        });
-      }
-    }
-  }, [completeCurrentSession]);
-
-  // Check for settings changes
-  useEffect(() => {
-    if (settingsInfo.settingsChanged) {
-      console.log('Settings changed flag detected, updating timer with new database values:', {
-        workMinutes: settingsInfo.workMinutes,
-        breakMinutes: settingsInfo.breakMinutes
-      });
-      
-      // Update refs to track the new settings
-      prevWorkMinutesRef.current = settingsInfo.workMinutes;
-      prevBreakMinutesRef.current = settingsInfo.breakMinutes;
-      
-      // Reset timer with current mode and new duration from database
-      const newSeconds = minutesToSeconds(
-        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-      );
-      
-      // IMPORTANT: Update both state and ref immediately and synchronously
-      setSecondsLeft(newSeconds);
-      secondsLeftRef.current = newSeconds;
-      
-      // Ensure timer is paused
-      setIsPaused(true);
-      isPausedRef.current = true;
-      
-      // Reset session start time
-      setSessionStartTime(null);
-      sessionStartTimeRef.current = null;
-      
-      // Mark timer as inactive
-      setIsTimerActive(false);
-      isTimerActiveRef.current = false;
-      
-      // Clear the settings changed flag
-      settingsInfo.setSettingsChanged(false);
-      
-      // Force a re-render to update the UI
-      setRenderKey(Date.now() + 5); // Use a different key to force a complete re-render
-      
-      console.log('Timer updated with new settings:', {
-        mode: modeRef.current,
-        seconds: newSeconds,
-        workMinutes: settingsInfo.workMinutes,
-        breakMinutes: settingsInfo.breakMinutes
-      });
-    }
-  }, [settingsInfo.settingsChanged, settingsInfo.workMinutes, settingsInfo.breakMinutes]);
-
-  // Handle authentication state changes
-  useEffect(() => {
-    // Check if auth state changed
-    if (prevAuthState !== authStatus && authStatus !== 'loading') {
-      console.log('Authentication state changed:', { 
-        previous: prevAuthState, 
-        current: authStatus,
-        isAuthenticated
-      });
-      
-      // Update previous auth state
-      setPrevAuthState(authStatus);
-      
-      // Handle auth state changes
-      if (authStatus === 'authenticated' || authStatus === 'unauthenticated') {
-        // We'll handle any active session directly here to avoid circular dependencies
-        if (sessionStartTimeRef.current) {
-          // Calculate elapsed time
-          const elapsedSeconds = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
-          
-          // Log completion with actual duration if authenticated (for the session that's ending)
-          if (prevAuthState === 'authenticated') {
-            handleTimerEvent(TIMER_EVENTS.COMPLETED, modeRef.current, elapsedSeconds);
-          }
-          
-          // Reset session start time
-          setSessionStartTime(null);
-          sessionStartTimeRef.current = null;
-          
-          console.log(`Session completed due to auth change: ${modeRef.current}, Duration: ${elapsedSeconds} seconds`);
-        }
-        
-        // If user just logged in, ensure we use the database values
-        if (authStatus === 'authenticated' && prevAuthState !== 'authenticated') {
-          console.log('User logged in, immediately updating timer with database values');
-          
-          // Clear any existing timer state to ensure we use fresh database values
-          localStorage.removeItem('timerState');
-          
-          // Immediately update the timer with database values
-          const databaseSeconds = minutesToSeconds(
-            modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-          );
-          
-          // Update the timer with database values
-          setSecondsLeft(databaseSeconds);
-          secondsLeftRef.current = databaseSeconds;
-          
-          // Update refs to track the settings
-          prevWorkMinutesRef.current = settingsInfo.workMinutes;
-          prevBreakMinutesRef.current = settingsInfo.breakMinutes;
           
           // Force a re-render to update the UI
           setRenderKey(Date.now());
           
-          console.log('Timer immediately updated with database values:', {
-            mode: modeRef.current,
-            seconds: databaseSeconds,
-            workMinutes: settingsInfo.workMinutes,
-            breakMinutes: settingsInfo.breakMinutes
+          console.log('Timer state restored:', { 
+            mode: state.mode, 
+            secondsLeft: secondsLeftRef.current,
+            isPaused: isPausedRef.current,
+            sessionStartTime: state.sessionStartTime,
+            isTimerActive: state.isTimerActive
           });
-        } else if (authStatus === 'unauthenticated' && prevAuthState === 'authenticated') {
-          // User logged out, reset to guest values
-          console.log('User logged out, stopping timer and resetting to guest values');
-          
-          // Clear any existing timer state
-          localStorage.removeItem('timerState');
-          
-          // Always reset to WORK mode when logging out
-          setMode(TIMER_MODES.WORK);
-          modeRef.current = TIMER_MODES.WORK;
-          
-          // Reset timer with guest work minutes (45 min)
-          const guestSeconds = minutesToSeconds(GUEST_WORK_MINUTES);
-          
-          // IMPORTANT: Update both state and ref immediately and synchronously
-          setSecondsLeft(guestSeconds);
-          secondsLeftRef.current = guestSeconds;
-          
-          // Update refs to track the guest settings
-          prevWorkMinutesRef.current = GUEST_WORK_MINUTES;
-          prevBreakMinutesRef.current = GUEST_BREAK_MINUTES;
-          
-          // Always pause the timer when logging out
-          setIsPaused(true);
-          isPausedRef.current = true;
-          
-          // Reset session if any was in progress
-          setSessionStartTime(null);
-          sessionStartTimeRef.current = null;
-          setIsTimerActive(false);
-          isTimerActiveRef.current = false;
-          
-          // Force a re-render to update the UI with a unique key
-          setRenderKey(Date.now() + 20);
-          
-          console.log('Timer reset to guest work mode (45 min):', {
-            mode: modeRef.current,
-            seconds: guestSeconds,
-            workMinutes: GUEST_WORK_MINUTES,
-            breakMinutes: GUEST_BREAK_MINUTES
-          });
-        } else {
-          // For other auth state changes, just reset the timer
-          resetTimer();
         }
       }
+    } catch (error) {
+      console.error('Error restoring timer state:', error);
     }
-  }, [authStatus, prevAuthState, isAuthenticated, resetTimer, handleTimerEvent, settingsInfo]);
-
-  // Initialize timer when component mounts or when settings change
-  useEffect(() => {
-    // Reset timer if settings have changed
-    const workMinutesChanged = prevWorkMinutesRef.current !== settingsInfo.workMinutes;
-    const breakMinutesChanged = prevBreakMinutesRef.current !== settingsInfo.breakMinutes;
-    
-    if (workMinutesChanged || breakMinutesChanged) {
-      console.log('Settings changed, resetting timer:', {
-        oldWorkMinutes: prevWorkMinutesRef.current,
-        newWorkMinutes: settingsInfo.workMinutes,
-        oldBreakMinutes: prevBreakMinutesRef.current,
-        newBreakMinutes: settingsInfo.breakMinutes
-      });
-      
-      // Update refs
-      prevWorkMinutesRef.current = settingsInfo.workMinutes;
-      prevBreakMinutesRef.current = settingsInfo.breakMinutes;
-      
-      // Reset timer with new settings
-      // This will update both the total time and current time
-      resetTimer();
-    } else if (secondsLeftRef.current === 0) {
-      // Initialize timer with work minutes from settings
-      const initialSeconds = minutesToSeconds(settingsInfo.workMinutes);
-      setSecondsLeft(initialSeconds);
-      secondsLeftRef.current = initialSeconds;
-    }
-  }, [settingsInfo.workMinutes, settingsInfo.breakMinutes, resetTimer]);
+  }, [completeCurrentSession]);
 
   // Effect to initialize timer on first render
   useEffect(() => {
@@ -693,6 +437,15 @@ function Timer() {
       return;
     }
     
+    // Skip initialization if there's an active session
+    if (sessionStartTimeRef.current) {
+      console.log('Active session in progress, skipping initialization');
+      return;
+    }
+    
+    // Only initialize if settings are loaded
+    if (settingsInfo.isLoading) return;
+
     // Get the correct minutes based on authentication status
     const workMinutes = isAuthenticated ? settingsInfo.workMinutes : GUEST_WORK_MINUTES;
     const breakMinutes = isAuthenticated ? settingsInfo.breakMinutes : GUEST_BREAK_MINUTES;
@@ -710,7 +463,6 @@ function Timer() {
       mode === TIMER_MODES.WORK ? workMinutes : breakMinutes
     );
     
-    // IMPORTANT: Update both the state and the ref to ensure consistency
     setSecondsLeft(initialSeconds);
     secondsLeftRef.current = initialSeconds;
     
@@ -719,10 +471,10 @@ function Timer() {
     prevBreakMinutesRef.current = breakMinutes;
     
     // Force a re-render to ensure UI is updated
-    setRenderKey(Date.now() + 25);
+    setRenderKey(Date.now());
     
     console.log('Timer initialized with seconds:', initialSeconds);
-  }, []);  // Only run once on mount, not when settings change
+  }, [settingsInfo.isLoading, settingsInfo.workMinutes, settingsInfo.breakMinutes, isAuthenticated, mode]);
 
   // Effect to update timer when settings load
   useEffect(() => {
@@ -731,6 +483,12 @@ function Timer() {
     
     // Only proceed if settings are loaded (not loading) and user is authenticated
     if (!settingsInfo.isLoading && isAuthenticated) {
+      // Don't reset if there's an active session
+      if (sessionStartTimeRef.current) {
+        console.log('Active session in progress, not updating timer with database values');
+        return;
+      }
+      
       console.log('Settings loaded from database, updating timer with database values:', {
         workMinutes: settingsInfo.workMinutes,
         breakMinutes: settingsInfo.breakMinutes
@@ -811,17 +569,36 @@ function Timer() {
   // Handle page visibility changes
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('Page became visible, restoring timer state');
-        // Small delay to ensure state is properly restored
-        setTimeout(() => {
-          restoreTimerState();
-          // Force UI update after restoration
-          setRenderKey(Date.now());
-        }, 100);
+      if (document.visibilityState === 'hidden') {
+        // Save state if timer was running, regardless of auth status
+        if (!isPausedRef.current && sessionStartTimeRef.current) {
+          console.log('Page became hidden, saving timer state');
+          saveTimerState();
+        }
       } else {
-        console.log('Page became hidden, saving timer state');
-        saveTimerState();
+        // When becoming visible, check if timer was running
+        const savedState = localStorage.getItem('timerState');
+        if (savedState) {
+          const state = JSON.parse(savedState);
+          if (!state.isPaused && state.sessionStartTime) {
+            // Calculate elapsed time while hidden
+            const elapsed = (Date.now() - state.timestamp) / 1000;
+            const secondsElapsed = Math.floor(elapsed);
+            const adjustedSecondsLeft = Math.max(0, state.secondsLeft - secondsElapsed);
+            
+            // Update timer state
+            setSecondsLeft(adjustedSecondsLeft);
+            secondsLeftRef.current = adjustedSecondsLeft;
+            
+            // If timer reached zero while away, handle completion
+            if (adjustedSecondsLeft === 0) {
+              completeCurrentSession();
+            }
+            
+            // Force UI update
+            setRenderKey(Date.now());
+          }
+        }
       }
     };
     
@@ -830,7 +607,7 @@ function Timer() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [saveTimerState, restoreTimerState]);
+  }, [saveTimerState, completeCurrentSession]);
 
   // Handle page navigation
   useEffect(() => {
@@ -841,75 +618,19 @@ function Timer() {
     setRenderKey(Date.now());
     
     // Save timer state when navigating away
-    const handleRouteChange = (url) => {
-      // Save the current URL before navigation
-      setPreviousUrl(router.asPath);
-      
+    const handleRouteChange = () => {
       // Save timer state before navigating
       saveTimerState();
     };
     
-    // Handle route change complete
-    const handleRouteChangeComplete = (url) => {
-      // Check if returning from stats
-      if (previousUrl.includes('/stats') && url === '/') {
-        console.log('Returning from stats page, will restore timer state');
-        setReturningFromStats(true);
-        // Force a re-render to ensure the timer state is restored
-        setTimeout(() => {
-          restoreTimerState();
-          setRenderKey(Date.now());
-        }, 100);
-      }
-    };
-    
     router.events.on('routeChangeStart', handleRouteChange);
-    router.events.on('routeChangeComplete', handleRouteChangeComplete);
     
     return () => {
       router.events.off('routeChangeStart', handleRouteChange);
-      router.events.off('routeChangeComplete', handleRouteChangeComplete);
       // Save state when component unmounts
       saveTimerState();
     };
-  }, [router, saveTimerState, restoreTimerState, previousUrl]);
-
-  // Effect to handle returning from settings
-  useEffect(() => {
-    // Check if we're returning from settings
-    if (!settingsInfo.showSettings) {
-      const returningFromSettings = localStorage.getItem('returningFromSettings') === 'true';
-      
-      if (returningFromSettings) {
-        console.log('Returning from settings, updating timer with new database values');
-        
-        // Clear the flag
-        localStorage.removeItem('returningFromSettings');
-        
-        // Calculate the correct seconds based on current mode and settings
-        const correctSeconds = minutesToSeconds(
-          modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-        );
-        
-        // IMPORTANT: Update both state and ref immediately
-        setSecondsLeft(correctSeconds);
-        secondsLeftRef.current = correctSeconds;
-        
-        console.log('Directly updated secondsLeft after returning from settings:', {
-          mode: modeRef.current,
-          newSeconds: correctSeconds,
-          workMinutes: settingsInfo.workMinutes,
-          breakMinutes: settingsInfo.breakMinutes
-        });
-        
-        // Force settings to be applied
-        settingsInfo.setSettingsChanged(true);
-      }
-      
-      // Force a re-render to ensure the timer is updated
-      setRenderKey(Date.now() + 3); // Use a unique key to force a complete re-render
-    }
-  }, [settingsInfo.showSettings, settingsInfo.workMinutes, settingsInfo.breakMinutes]);
+  }, [router, saveTimerState, restoreTimerState]);
 
   // Calculate totalSeconds and percentage right before rendering to ensure they're up-to-date
   const calculateTimerValues = () => {
@@ -922,50 +643,7 @@ function Timer() {
       mode === TIMER_MODES.WORK ? workMinutes : breakMinutes
     );
     
-    // IMPORTANT: If the secondsLeft doesn't match what it should be based on settings,
-    // we need to update it to match the current settings
-    if (isAuthenticated) {
-      const expectedSeconds = minutesToSeconds(
-        mode === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-      );
-      
-      // Check if we're returning from settings or if there's a mismatch
-      const returningFromSettings = localStorage.getItem('returningFromSettings') === 'true';
-      const mismatch = secondsLeft !== expectedSeconds && !sessionStartTimeRef.current;
-      
-      if (mismatch || returningFromSettings) {
-        console.log('Detected mismatch in calculateTimerValues for authenticated user:', {
-          secondsLeft,
-          expectedSeconds,
-          returningFromSettings,
-          mismatch
-        });
-        
-        // This is a synchronous update that will be reflected in the next render
-        secondsLeftRef.current = expectedSeconds;
-        // We don't call setSecondsLeft here to avoid re-renders during the current render
-      }
-    } else {
-      // For guest users, ensure we're using the correct guest values
-      const expectedGuestSeconds = minutesToSeconds(
-        mode === TIMER_MODES.WORK ? GUEST_WORK_MINUTES : GUEST_BREAK_MINUTES
-      );
-      
-      // If there's a mismatch and no active session, update the seconds
-      if (secondsLeft !== expectedGuestSeconds && !sessionStartTimeRef.current) {
-        console.log('Detected mismatch in calculateTimerValues for guest user:', {
-          secondsLeft,
-          expectedGuestSeconds,
-          mode
-        });
-        
-        // Update the ref for the next render
-        secondsLeftRef.current = expectedGuestSeconds;
-      }
-    }
-    
     // Calculate percentage based on current seconds left and total
-    // If secondsLeft > total, the percentage calculation will be capped at 100% by the helper function
     const percent = calculatePercentage(secondsLeft, total);
     
     console.log('Calculated timer values:', {
@@ -981,87 +659,33 @@ function Timer() {
     return { totalSeconds: total, percentage: percent };
   };
 
-  // Effect to ensure the UI is updated when settings change
-  useEffect(() => {
-    // Force a re-render whenever settings change to update the progress bar
-    setRenderKey(Date.now());
-    
-    console.log('Settings changed, updating UI with new values:', {
-      workMinutes: settingsInfo.workMinutes,
-      breakMinutes: settingsInfo.breakMinutes,
-      mode,
-      secondsLeft
-    });
-  }, [settingsInfo.workMinutes, settingsInfo.breakMinutes]);
-
   // Get the latest timer values for rendering
   const { totalSeconds, percentage } = calculateTimerValues();
   const timeDisplay = formatTime(secondsLeft);
 
-  // Immediate fix for secondsLeft if it doesn't match the current settings
-  useEffect(() => {
-    // For authenticated users
-    if (isAuthenticated) {
-      const expectedSeconds = minutesToSeconds(
-        mode === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-      );
-      
-      // Only fix if there's no active session and the seconds don't match
-      if (!sessionStartTimeRef.current && secondsLeft !== expectedSeconds) {
-        console.log('CRITICAL: Detected mismatch for authenticated user, fixing immediately:', {
-          current: secondsLeft,
-          expected: expectedSeconds,
-          mode,
-          workMinutes: settingsInfo.workMinutes,
-          breakMinutes: settingsInfo.breakMinutes
-        });
-        
-        // Update both state and ref
-        setSecondsLeft(expectedSeconds);
-        secondsLeftRef.current = expectedSeconds;
-        
-        // Force a re-render
-        setRenderKey(Date.now() + 10);
-        
-        console.log('Fixed secondsLeft for authenticated user:', {
-          from: secondsLeft,
-          to: expectedSeconds,
-          mode
-        });
-      }
-    } 
-    // For guest users
-    else {
-      const expectedGuestSeconds = minutesToSeconds(
-        mode === TIMER_MODES.WORK ? GUEST_WORK_MINUTES : GUEST_BREAK_MINUTES
-      );
-      
-      // Only fix if there's no active session and the seconds don't match
-      if (!sessionStartTimeRef.current && secondsLeft !== expectedGuestSeconds) {
-        console.log('CRITICAL: Detected mismatch for guest user, fixing immediately:', {
-          current: secondsLeft,
-          expected: expectedGuestSeconds,
-          mode,
-          workMinutes: GUEST_WORK_MINUTES,
-          breakMinutes: GUEST_BREAK_MINUTES
-        });
-        
-        // Update both state and ref
-        setSecondsLeft(expectedGuestSeconds);
-        secondsLeftRef.current = expectedGuestSeconds;
-        
-        // Force a re-render
-        setRenderKey(Date.now() + 15);
-        
-        console.log('Fixed secondsLeft for guest user:', {
-          from: secondsLeft,
-          to: expectedGuestSeconds,
-          mode
-        });
-      }
-    }
-  });  // Run on every render to catch any mismatches
+  // Handle pink noise playback
+  const handlePinkNoisePlayback = useCallback((shouldPlay) => {
+    if (!settingsInfo.pinkNoiseEnabled) return;
 
+    if (shouldPlay && !isPinkNoisePlayingRef.current) {
+      console.log('Starting pink noise playback');
+      if (!pinkNoiseRef.current) {
+        pinkNoiseRef.current = new Audio(PINK_NOISE_URLS[settingsInfo.pinkNoiseType]);
+        pinkNoiseRef.current.loop = true;
+      }
+      pinkNoiseRef.current.play();
+      isPinkNoisePlayingRef.current = true;
+    } else if (!shouldPlay && isPinkNoisePlayingRef.current) {
+      console.log('Stopping pink noise playback');
+      if (pinkNoiseRef.current) {
+        pinkNoiseRef.current.pause();
+        pinkNoiseRef.current.currentTime = 0;
+      }
+      isPinkNoisePlayingRef.current = false;
+    }
+  }, [settingsInfo.pinkNoiseEnabled, settingsInfo.pinkNoiseType]);
+
+  // Handle play/pause
   const handlePlayPause = useCallback((shouldPlay) => {
     if (shouldPlay) {
       // If starting from paused state
@@ -1077,6 +701,7 @@ function Timer() {
       
       setIsPaused(false);
       isPausedRef.current = false;
+      handlePinkNoisePlayback(true); // Start pink noise
       
       // Mark timer as active
       setIsTimerActive(true);
@@ -1087,6 +712,7 @@ function Timer() {
     } else {
       setIsPaused(true);
       isPausedRef.current = true;
+      handlePinkNoisePlayback(false); // Pause pink noise
       
       // Log pause event if authenticated
       if (isAuthenticated) {
@@ -1096,28 +722,15 @@ function Timer() {
       // Enable Settings and Stats buttons when timer is paused
       console.log('Timer paused, enabling Settings and Stats buttons');
     }
-  }, [handleTimerEvent, startNewSession, modeRef, isAuthenticated]);
+  }, [handleTimerEvent, startNewSession, modeRef, isAuthenticated, handlePinkNoisePlayback]);
 
   const handleSettingsClick = () => {
-    if (isAuthenticated && isPaused) {
-      // Save timer state before showing settings
-      saveTimerState();
-      
-      // Set a flag to indicate we're going to settings
-      // This will help us know to update the timer when we return
-      localStorage.setItem('returningFromSettings', 'true');
-      
-      // Show settings
-      settingsInfo.setShowSettings(true);
-      
-      console.log('Opening settings, timer state saved');
-    }
+    // Show settings modal
+    settingsInfo.setShowSettings(true);
   };
 
   const handleStatsClick = () => {
-    if (isAuthenticated && isPaused) {
-      // Save timer state before navigating to stats
-      saveTimerState();
+    if (isAuthenticated) {
       router.push('/stats');
     }
   };
@@ -1148,6 +761,13 @@ function Timer() {
       
       const data = await response.json();
       console.log('Feedback submitted successfully:', data);
+      
+      // Add a delay before closing the modal and switching modes
+      setTimeout(() => {
+        setShowFeedbackModal(false);
+        // Switch modes after feedback is submitted
+        switchMode();
+      }, UI.AUTO_CLOSE_DELAY);
     } catch (error) {
       console.error('Error submitting feedback:', error);
     }
