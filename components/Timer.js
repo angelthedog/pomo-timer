@@ -463,6 +463,7 @@ function Timer() {
       mode === TIMER_MODES.WORK ? workMinutes : breakMinutes
     );
     
+    // Set both state and ref to ensure consistency
     setSecondsLeft(initialSeconds);
     secondsLeftRef.current = initialSeconds;
     
@@ -481,22 +482,27 @@ function Timer() {
     // This effect runs whenever settingsInfo.workMinutes or settingsInfo.breakMinutes changes
     // or when isAuthenticated or settingsInfo.isLoading changes
     
-    // Only proceed if settings are loaded (not loading) and user is authenticated
-    if (!settingsInfo.isLoading && isAuthenticated) {
+    // Only proceed if settings are loaded (not loading)
+    if (!settingsInfo.isLoading) {
       // Don't reset if there's an active session
       if (sessionStartTimeRef.current) {
         console.log('Active session in progress, not updating timer with database values');
         return;
       }
       
-      console.log('Settings loaded from database, updating timer with database values:', {
-        workMinutes: settingsInfo.workMinutes,
-        breakMinutes: settingsInfo.breakMinutes
+      // Get the correct minutes based on authentication status
+      const workMinutes = isAuthenticated ? settingsInfo.workMinutes : GUEST_WORK_MINUTES;
+      const breakMinutes = isAuthenticated ? settingsInfo.breakMinutes : GUEST_BREAK_MINUTES;
+      
+      console.log('Settings loaded, updating timer with values:', {
+        workMinutes,
+        breakMinutes,
+        isAuthenticated
       });
       
-      // Always update the timer with the current mode's duration from database
+      // Always update the timer with the current mode's duration
       const databaseSeconds = minutesToSeconds(
-        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
+        modeRef.current === TIMER_MODES.WORK ? workMinutes : breakMinutes
       );
       
       // IMPORTANT: Update both the state and the ref to ensure consistency
@@ -504,17 +510,17 @@ function Timer() {
       secondsLeftRef.current = databaseSeconds;
       
       // Update the refs to track the new settings
-      prevWorkMinutesRef.current = settingsInfo.workMinutes;
-      prevBreakMinutesRef.current = settingsInfo.breakMinutes;
+      prevWorkMinutesRef.current = workMinutes;
+      prevBreakMinutesRef.current = breakMinutes;
       
       // Force a re-render to update the UI
       setRenderKey(Date.now());
       
-      console.log('Timer updated with database values:', {
+      console.log('Timer updated with values:', {
         mode: modeRef.current,
         seconds: databaseSeconds,
-        workMinutes: settingsInfo.workMinutes,
-        breakMinutes: settingsInfo.breakMinutes
+        workMinutes,
+        breakMinutes
       });
     }
   }, [settingsInfo.isLoading, isAuthenticated, settingsInfo.workMinutes, settingsInfo.breakMinutes]);
