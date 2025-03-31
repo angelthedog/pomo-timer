@@ -206,59 +206,43 @@ function Timer() {
   }, [settingsInfo, startNewSession, isAuthenticated]);
 
   const completeCurrentSession = useCallback(() => {
-    if (!sessionStartTimeRef.current) return;
-    
-    // Play completion sound
+    // Play completion sound immediately
     try {
       // Create a new Audio object each time for more reliable playback
       const sound = new Audio('/sounds/complete.mp3');
-      sound.volume = 1.0; // Ensure full volume
+      sound.volume = 1.0;
       
-      // Play the sound
+      // Try to play the sound immediately
       sound.play()
         .then(() => console.log('Completion sound played successfully'))
-        .catch(err => console.error('Error playing completion sound:', err));
-        
-      // Also try the audio element as backup
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.volume = 1.0;
-        audioRef.current.play().catch(e => console.error("Backup audio play failed:", e));
-      }
+        .catch(err => {
+          console.error('Error playing completion sound:', err);
+        });
     } catch (err) {
       console.error('Error creating audio:', err);
     }
-    
-    // Calculate elapsed time
-    const elapsedSeconds = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
-    
-    // Store the current session ID if it's a work session
-    const workSessionId = modeRef.current === TIMER_MODES.WORK ? currentSessionId : null;
-    
-    // Log completion with actual duration if authenticated
+
+    // Log the event only for authenticated users
     if (isAuthenticated) {
-      handleTimerEvent(TIMER_EVENTS.COMPLETED, modeRef.current, elapsedSeconds);
+      logTimerEvent('session_completed', {
+        mode: modeRef.current,
+        duration: modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes * 60 : settingsInfo.breakMinutes * 60,
+        elapsed: Math.floor((Date.now() - sessionStartTimeRef.current) / 1000)
+      });
     }
-    
-    // Reset session start time
-    setSessionStartTime(null);
-    sessionStartTimeRef.current = null;
-    
-    console.log(`Session completed naturally: ${modeRef.current}, Duration: ${elapsedSeconds} seconds`);
-    
-    // Show feedback modal only for work sessions
+
+    // Show feedback modal for work sessions
     if (modeRef.current === TIMER_MODES.WORK && isAuthenticated) {
-      console.log('Showing feedback modal for work session ID:', workSessionId);
       setShowFeedbackModal(true);
-      // Store the work session ID for feedback
-      setCurrentSessionId(workSessionId);
-      // Don't switch mode yet - wait for feedback to be submitted
-      return;
+      setCurrentSessionId(Date.now().toString());
     }
-    
-    // Switch mode and start next session automatically
+
+    // Switch to next mode and start it
     switchMode();
-  }, [handleTimerEvent, modeRef, isAuthenticated, currentSessionId, switchMode]);
+    
+    // Clear any saved state
+    localStorage.removeItem('timerState');
+  }, [logTimerEvent, settingsInfo.workMinutes, settingsInfo.breakMinutes, isAuthenticated, switchMode]);
 
   const skipCurrentSession = useCallback(() => {
     if (!sessionStartTimeRef.current) return;
@@ -390,54 +374,49 @@ function Timer() {
 
   // Save timer state to localStorage
   const saveTimerState = useCallback(() => {
-    // Skip saving state for unauthenticated users
-    if (!isAuthenticated) return;
-
     const state = {
       mode: modeRef.current,
       secondsLeft: secondsLeftRef.current,
       isPaused: isPausedRef.current,
       sessionStartTime: sessionStartTimeRef.current,
-      isTimerActive: isTimerActiveRef.current
+      isTimerActive: isTimerActiveRef.current,
+      timestamp: Date.now() // Add timestamp for accurate elapsed time calculation
     };
     
-    localStorage.setItem('timerState', JSON.stringify(state));
+      localStorage.setItem('timerState', JSON.stringify(state));
     console.log('Timer state saved:', state);
-  }, [isAuthenticated]);
+  }, []);
 
   // Restore timer state from localStorage
   const restoreTimerState = useCallback(() => {
-    // Skip restoring state for unauthenticated users
-    if (!isAuthenticated) return;
-
-    const savedState = localStorage.getItem('timerState');
-    if (savedState) {
-      const state = JSON.parse(savedState);
-      
+      const savedState = localStorage.getItem('timerState');
+      if (savedState) {
+        const state = JSON.parse(savedState);
+        
       // Only restore if the saved state is valid
       if (state && typeof state.mode === 'string' && typeof state.secondsLeft === 'number') {
-        setMode(state.mode);
-        modeRef.current = state.mode;
-        
-        setSecondsLeft(state.secondsLeft);
-        secondsLeftRef.current = state.secondsLeft;
-        
-        setIsPaused(state.isPaused);
-        isPausedRef.current = state.isPaused;
-        
-        setSessionStartTime(state.sessionStartTime);
-        sessionStartTimeRef.current = state.sessionStartTime;
-        
+          setMode(state.mode);
+          modeRef.current = state.mode;
+          
+            setSecondsLeft(state.secondsLeft);
+            secondsLeftRef.current = state.secondsLeft;
+            
+            setIsPaused(state.isPaused);
+            isPausedRef.current = state.isPaused;
+            
+              setSessionStartTime(state.sessionStartTime);
+              sessionStartTimeRef.current = state.sessionStartTime;
+              
         setIsTimerActive(state.isTimerActive);
         isTimerActiveRef.current = state.isTimerActive;
         
         console.log('Timer state restored:', state);
-      } else {
+            } else {
         console.log('Invalid saved state, skipping restore');
         localStorage.removeItem('timerState');
       }
     }
-  }, [isAuthenticated]);
+  }, []);
 
   // Effect to initialize timer on first render
   useEffect(() => {
@@ -556,10 +535,10 @@ function Timer() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        // Save state if timer was running, regardless of auth status
+        // Save state if timer was running
         if (!isPausedRef.current && sessionStartTimeRef.current) {
-          console.log('Page became hidden, saving timer state');
-          saveTimerState();
+        console.log('Page became hidden, saving timer state');
+        saveTimerState();
         }
       } else {
         // When becoming visible, check if timer was running
@@ -585,6 +564,9 @@ function Timer() {
             setRenderKey(Date.now());
           }
         }
+        
+        // Clear saved state after handling it
+        localStorage.removeItem('timerState');
       }
     };
     
@@ -632,16 +614,7 @@ function Timer() {
     // Calculate percentage based on current seconds left and total
     const percent = calculatePercentage(secondsLeft, total);
     
-    console.log('Calculated timer values:', {
-      workMinutes,
-      breakMinutes,
-      total,
-      secondsLeft,
-      percent,
-      mode,
-      isAuthenticated
-    });
-    
+
     return { totalSeconds: total, percentage: percent };
   };
 
@@ -698,7 +671,7 @@ function Timer() {
 
   const handleSettingsClick = () => {
     // Show settings modal
-    settingsInfo.setShowSettings(true);
+      settingsInfo.setShowSettings(true);
   };
 
   const handleStatsClick = () => {
