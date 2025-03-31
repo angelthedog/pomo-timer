@@ -3,10 +3,6 @@ import { TIMER_SETTINGS, PINK_NOISE_TYPES } from '../utils/constants';
 import { useSession } from 'next-auth/react';
 import { fetchDefaultSettings } from '../utils/api';
 
-// Default times for unauthenticated users
-const GUEST_WORK_MINUTES = 45;
-const GUEST_BREAK_MINUTES = 10;
-
 const SettingsContext = createContext({});
 
 export function SettingsProvider({ children }) {
@@ -14,8 +10,8 @@ export function SettingsProvider({ children }) {
   const isAuthenticated = !!session;
   
   const [showSettings, setShowSettings] = useState(false);
-  const [workMinutes, setWorkMinutes] = useState(GUEST_WORK_MINUTES);
-  const [breakMinutes, setBreakMinutes] = useState(GUEST_BREAK_MINUTES);
+  const [workMinutes, setWorkMinutes] = useState(TIMER_SETTINGS.DEFAULT_WORK_MINUTES);
+  const [breakMinutes, setBreakMinutes] = useState(TIMER_SETTINGS.DEFAULT_BREAK_MINUTES);
   const [noiseCancellation, setNoiseCancellation] = useState(false);
   const [pinkNoiseEnabled, setPinkNoiseEnabled] = useState(false);
   const [pinkNoiseType, setPinkNoiseType] = useState(PINK_NOISE_TYPES[0]);
@@ -29,15 +25,15 @@ export function SettingsProvider({ children }) {
       
       // For unauthenticated users, use fixed default times
       if (!isAuthenticated) {
-        setWorkMinutes(GUEST_WORK_MINUTES);
-        setBreakMinutes(GUEST_BREAK_MINUTES);
+        setWorkMinutes(TIMER_SETTINGS.DEFAULT_WORK_MINUTES);
+        setBreakMinutes(TIMER_SETTINGS.DEFAULT_BREAK_MINUTES);
         setNoiseCancellation(false);
         setPinkNoiseEnabled(false);
         setPinkNoiseType(PINK_NOISE_TYPES[0]);
         setIsLoading(false);
         console.log('Using default settings for guest:', { 
-          workMinutes: GUEST_WORK_MINUTES, 
-          breakMinutes: GUEST_BREAK_MINUTES,
+          workMinutes: TIMER_SETTINGS.DEFAULT_WORK_MINUTES, 
+          breakMinutes: TIMER_SETTINGS.DEFAULT_BREAK_MINUTES,
           noiseCancellation: false,
           pinkNoiseEnabled: false,
           pinkNoiseType: PINK_NOISE_TYPES[0]

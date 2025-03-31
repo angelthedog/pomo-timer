@@ -10,14 +10,10 @@ import CancelButton from "./CancelButton";
 import SettingsButton from "./SettingsButton";
 import StatsButton from "./StatsButton";
 import { logTimerEvent } from '../utils/api';
-import { TIMER_MODES, TIMER_EVENTS, COLORS, UI, PINK_NOISE_URLS } from '../utils/constants';
+import { TIMER_MODES, TIMER_EVENTS, COLORS, UI, PINK_NOISE_URLS, TIMER_SETTINGS } from '../utils/constants';
 import { formatTime, calculatePercentage, minutesToSeconds } from '../utils/helpers';
 import { useRouter } from 'next/router';
 import FeedbackModal from './FeedbackModal';
-
-// Default times for unauthenticated users
-const GUEST_WORK_MINUTES = 45;
-const GUEST_BREAK_MINUTES = 10;
 
 function Timer() {
   const router = useRouter();
@@ -268,8 +264,8 @@ function Timer() {
     const nextMode = modeRef.current === TIMER_MODES.WORK ? TIMER_MODES.BREAK : TIMER_MODES.WORK;
     
     // Always get the latest values from settings
-    const workMinutes = isAuthenticated ? settingsInfo.workMinutes : GUEST_WORK_MINUTES;
-    const breakMinutes = isAuthenticated ? settingsInfo.breakMinutes : GUEST_BREAK_MINUTES;
+    const workMinutes = isAuthenticated ? settingsInfo.workMinutes : TIMER_SETTINGS.DEFAULT_WORK_MINUTES;
+    const breakMinutes = isAuthenticated ? settingsInfo.breakMinutes : TIMER_SETTINGS.DEFAULT_BREAK_MINUTES;
     
     // Calculate seconds based on the latest settings values
     const nextSeconds = minutesToSeconds(
@@ -447,8 +443,8 @@ function Timer() {
     if (settingsInfo.isLoading) return;
 
     // Get the correct minutes based on authentication status
-    const workMinutes = isAuthenticated ? settingsInfo.workMinutes : GUEST_WORK_MINUTES;
-    const breakMinutes = isAuthenticated ? settingsInfo.breakMinutes : GUEST_BREAK_MINUTES;
+    const workMinutes = isAuthenticated ? settingsInfo.workMinutes : TIMER_SETTINGS.DEFAULT_WORK_MINUTES;
+    const breakMinutes = isAuthenticated ? settingsInfo.breakMinutes : TIMER_SETTINGS.DEFAULT_BREAK_MINUTES;
     
     console.log('Initializing timer with values:', {
       isAuthenticated,
@@ -635,8 +631,8 @@ function Timer() {
   // Calculate totalSeconds and percentage right before rendering to ensure they're up-to-date
   const calculateTimerValues = () => {
     // Always use the latest values from settings
-    const workMinutes = isAuthenticated ? settingsInfo.workMinutes : GUEST_WORK_MINUTES;
-    const breakMinutes = isAuthenticated ? settingsInfo.breakMinutes : GUEST_BREAK_MINUTES;
+    const workMinutes = isAuthenticated ? settingsInfo.workMinutes : TIMER_SETTINGS.DEFAULT_WORK_MINUTES;
+    const breakMinutes = isAuthenticated ? settingsInfo.breakMinutes : TIMER_SETTINGS.DEFAULT_BREAK_MINUTES;
     
     // Calculate total seconds based on current mode and latest settings
     const total = minutesToSeconds(
@@ -817,8 +813,8 @@ function Timer() {
           <div>Seconds Left: {secondsLeft}</div>
           <div>Total Seconds: {totalSeconds}</div>
           <div>Percentage: {percentage.toFixed(2)}%</div>
-          <div>Work Minutes: {isAuthenticated ? settingsInfo.workMinutes : GUEST_WORK_MINUTES}</div>
-          <div>Break Minutes: {isAuthenticated ? settingsInfo.breakMinutes : GUEST_BREAK_MINUTES}</div>
+          <div>Work Minutes: {isAuthenticated ? settingsInfo.workMinutes : TIMER_SETTINGS.DEFAULT_WORK_MINUTES}</div>
+          <div>Break Minutes: {isAuthenticated ? settingsInfo.breakMinutes : TIMER_SETTINGS.DEFAULT_BREAK_MINUTES}</div>
         </div>
       )}
       
@@ -859,8 +855,8 @@ function Timer() {
         </span>
         <div className="timer-info">
           {mode === TIMER_MODES.WORK ? 
-            `${secondsLeft} / ${totalSeconds} seconds (${isAuthenticated ? settingsInfo.workMinutes : GUEST_WORK_MINUTES} minutes)` : 
-            `${secondsLeft} / ${totalSeconds} seconds (${isAuthenticated ? settingsInfo.breakMinutes : GUEST_BREAK_MINUTES} minutes)`
+            `${secondsLeft} / ${totalSeconds} seconds (${isAuthenticated ? settingsInfo.workMinutes : TIMER_SETTINGS.DEFAULT_WORK_MINUTES} minutes)` : 
+            `${secondsLeft} / ${totalSeconds} seconds (${isAuthenticated ? settingsInfo.breakMinutes : TIMER_SETTINGS.DEFAULT_BREAK_MINUTES} minutes)`
           }
         </div>
         {!isAuthenticated && (
