@@ -4,10 +4,55 @@ import dbConnect from '../../../lib/mongoose';
 import User from '../../../models/User';
 import authOptions from '../auth/[...nextauth]';
 
+// Validation functions
+const validateWorkMinutes = (minutes) => {
+  if (!Number.isInteger(minutes)) return false;
+  return minutes >= TIMER_SETTINGS.WORK_MIN_MINUTES && minutes <= TIMER_SETTINGS.WORK_MAX_MINUTES;
+};
+
+const validateBreakMinutes = (minutes) => {
+  if (!Number.isInteger(minutes)) return false;
+  return minutes >= TIMER_SETTINGS.BREAK_MIN_MINUTES && minutes <= TIMER_SETTINGS.BREAK_MAX_MINUTES;
+};
+
+const validateSettings = (settings) => {
+  const errors = [];
+  
+  if (!validateWorkMinutes(settings.workMinutes)) {
+    errors.push(`Work time must be between ${TIMER_SETTINGS.WORK_MIN_MINUTES} and ${TIMER_SETTINGS.WORK_MAX_MINUTES} minutes`);
+  }
+  
+  if (!validateBreakMinutes(settings.breakMinutes)) {
+    errors.push(`Break time must be between ${TIMER_SETTINGS.BREAK_MIN_MINUTES} and ${TIMER_SETTINGS.BREAK_MAX_MINUTES} minutes`);
+  }
+  
+  if (typeof settings.noiseCancellation !== 'boolean') {
+    errors.push('Noise cancellation must be a boolean');
+  }
+  
+  if (typeof settings.pinkNoiseEnabled !== 'boolean') {
+    errors.push('Pink noise enabled must be a boolean');
+  }
+  
+  if (settings.pinkNoiseEnabled && !PINK_NOISE_TYPES.includes(settings.pinkNoiseType)) {
+    errors.push(`Pink noise type must be one of: ${PINK_NOISE_TYPES.join(', ')}`);
+  }
+  
+  return errors;
+};
+
+// Sanitize settings before saving
+const sanitizeSettings = (settings) => ({
+  workMinutes: Math.min(Math.max(settings.workMinutes, TIMER_SETTINGS.WORK_MIN_MINUTES), TIMER_SETTINGS.WORK_MAX_MINUTES),
+  breakMinutes: Math.min(Math.max(settings.breakMinutes, TIMER_SETTINGS.BREAK_MIN_MINUTES), TIMER_SETTINGS.BREAK_MAX_MINUTES),
+  noiseCancellation: Boolean(settings.noiseCancellation),
+  pinkNoiseEnabled: Boolean(settings.pinkNoiseEnabled),
+  pinkNoiseType: PINK_NOISE_TYPES.includes(settings.pinkNoiseType) ? settings.pinkNoiseType : PINK_NOISE_TYPES[0]
+});
+
 /**
  * API route for saving timer settings
- * @param {Object} req - The request object
- * @param {Object} res - The response object
+ * Validates input, sanitizes data, and saves to database
  */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -15,101 +60,43 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Check if user is authenticated using getServerSession
     const session = await getServerSession(req, res, authOptions);
-    
-    console.log('Session in settings/save:', session);
-    
     if (!session) {
       return res.status(401).json({ message: 'Not authenticated' });
     }
 
-    await dbConnect();
+    // Validate settings
+    const errors = validateSettings(req.body);
+    if (errors.length > 0) {
+      return res.status(400).json({ message: 'Invalid settings', errors });
+    }
 
-    const { 
-      workMinutes, 
-      breakMinutes, 
-      noiseCancellation, 
-      pinkNoiseEnabled, 
-      pinkNoiseType 
-    } = req.body;
+    await dbConnect();
     
-    // Validate input
-    if (typeof workMinutes !== 'number' || typeof breakMinutes !== 'number') {
-      return res.status(400).json({ message: 'Invalid settings format' });
-    }
-    
-    // Validate work minutes
-    if (
-      workMinutes < TIMER_SETTINGS.WORK_MIN_MINUTES || 
-      workMinutes > TIMER_SETTINGS.WORK_MAX_MINUTES
-    ) {
-      return res.status(400).json({ 
-        message: `Work time must be between ${TIMER_SETTINGS.WORK_MIN_MINUTES} and ${TIMER_SETTINGS.WORK_MAX_MINUTES} minutes` 
-      });
-    }
-    
-    // Validate break minutes
-    if (
-      breakMinutes < TIMER_SETTINGS.BREAK_MIN_MINUTES || 
-      breakMinutes > TIMER_SETTINGS.BREAK_MAX_MINUTES
-    ) {
-      return res.status(400).json({ 
-        message: `Break time must be between ${TIMER_SETTINGS.BREAK_MIN_MINUTES} and ${TIMER_SETTINGS.BREAK_MAX_MINUTES} minutes` 
-      });
-    }
-    
-    // Validate noise cancellation
-    if (typeof noiseCancellation !== 'boolean') {
-      return res.status(400).json({ message: 'Noise cancellation must be a boolean' });
-    }
-    
-    // Validate pink noise enabled
-    if (typeof pinkNoiseEnabled !== 'boolean') {
-      return res.status(400).json({ message: 'Pink noise enabled must be a boolean' });
-    }
-    
-    // Validate pink noise type
-    if (pinkNoiseEnabled && !PINK_NOISE_TYPES.includes(pinkNoiseType)) {
-      return res.status(400).json({ 
-        message: `Pink noise type must be one of: ${PINK_NOISE_TYPES.join(', ')}` 
-      });
-    }
-    
-    // Find user by username
     const user = await User.findOne({ username: session.user.name });
-    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
-    // Update user settings
-    user.timerSettings = {
-      workMinutes,
-      breakMinutes,
-      noiseCancellation,
-      pinkNoiseEnabled,
-      pinkNoiseType
-    };
-    
-    // Save updated user
+
+    // Sanitize and save settings
+    const sanitizedSettings = sanitizeSettings(req.body);
+    user.timerSettings = sanitizedSettings;
     await user.save();
-    
-    console.log(`Settings saved for user ${user.username}: Work=${workMinutes}, Break=${breakMinutes}, NoiseCancellation=${noiseCancellation}, PinkNoiseEnabled=${pinkNoiseEnabled}, PinkNoiseType=${pinkNoiseType}`);
-    
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Settings saved:', { username: user.username, settings: sanitizedSettings });
+    }
+
     res.status(200).json({ 
       success: true,
       message: 'Settings saved successfully',
-      settings: { 
-        workMinutes, 
-        breakMinutes, 
-        noiseCancellation, 
-        pinkNoiseEnabled, 
-        pinkNoiseType 
-      }
+      settings: sanitizedSettings
     });
   } catch (error) {
     console.error('Error saving settings:', error);
-    res.status(500).json({ message: 'Error saving settings', error: error.message });
+    res.status(500).json({ 
+      message: 'Error saving settings', 
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 } 

@@ -152,17 +152,45 @@ function Timer() {
   // Handle pink noise playback
   const handlePinkNoisePlayback = useCallback((shouldPlay) => {
     // Skip pink noise for unauthenticated users
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      console.log('Skipping pink noise - user not authenticated');
+      return;
+    }
 
-    if (shouldPlay) {
-      // Start playing pink noise
+    console.log('Pink noise settings:', {
+      shouldPlay,
+      enabled: settingsInfo.pinkNoiseEnabled,
+      type: settingsInfo.pinkNoiseType,
+      audioElement: !!pinkNoiseRef.current
+    });
+
+    if (shouldPlay && settingsInfo.pinkNoiseEnabled) {
+      // Start playing pink noise with current settings
       if (pinkNoiseRef.current) {
+        // Update audio source to match current settings
+        const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
+        console.log('Playing pink noise with URL:', audioUrl);
+        
+        if (pinkNoiseRef.current.src !== audioUrl) {
+          pinkNoiseRef.current.src = audioUrl;
+        }
+        
         pinkNoiseRef.current.play()
           .then(() => {
             isPinkNoisePlayingRef.current = true;
-            console.log('Pink noise started playing');
+            console.log('Pink noise started playing successfully:', settingsInfo.pinkNoiseType);
           })
-          .catch(err => console.error('Error playing pink noise:', err));
+          .catch(err => {
+            console.error('Error playing pink noise:', err);
+            console.log('Audio element state:', {
+              src: pinkNoiseRef.current.src,
+              readyState: pinkNoiseRef.current.readyState,
+              paused: pinkNoiseRef.current.paused,
+              error: pinkNoiseRef.current.error
+            });
+          });
+      } else {
+        console.error('Pink noise audio element not initialized');
       }
     } else {
       // Stop playing pink noise
@@ -172,7 +200,7 @@ function Timer() {
         console.log('Pink noise stopped');
       }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, settingsInfo.pinkNoiseEnabled, settingsInfo.pinkNoiseType]);
 
   const switchMode = useCallback(() => {
     const nextMode = modeRef.current === TIMER_MODES.WORK ? TIMER_MODES.BREAK : TIMER_MODES.WORK;
@@ -508,6 +536,48 @@ function Timer() {
     }
   }, [settingsInfo.isLoading, isAuthenticated, settingsInfo.workMinutes, settingsInfo.breakMinutes]);
 
+  // Effect to handle settings updates
+  useEffect(() => {
+    if (!settingsInfo.isLoading && isAuthenticated) {
+      // Calculate new seconds based on current mode and latest settings
+      const newSeconds = minutesToSeconds(
+        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
+      );
+      
+      // Only update timer if it's not currently running
+      if (!isTimerActiveRef.current) {
+        // Update timer state
+        setSecondsLeft(newSeconds);
+        secondsLeftRef.current = newSeconds;
+        
+        // Force UI update
+        setRenderKey(Date.now());
+        
+        console.log('Timer updated with new settings:', {
+          mode: modeRef.current,
+          newSeconds,
+          workMinutes: settingsInfo.workMinutes,
+          breakMinutes: settingsInfo.breakMinutes,
+          pinkNoiseEnabled: settingsInfo.pinkNoiseEnabled,
+          pinkNoiseType: settingsInfo.pinkNoiseType
+        });
+      }
+
+      // Update pink noise if timer is running
+      if (isTimerActiveRef.current && !isPausedRef.current) {
+        handlePinkNoisePlayback(settingsInfo.pinkNoiseEnabled);
+      }
+    }
+  }, [
+    settingsInfo.isLoading,
+    isAuthenticated,
+    settingsInfo.workMinutes,
+    settingsInfo.breakMinutes,
+    settingsInfo.pinkNoiseEnabled,
+    settingsInfo.pinkNoiseType,
+    handlePinkNoisePlayback
+  ]);
+
   // Timer tick effect
   useEffect(() => {
     const interval = setInterval(() => {
@@ -742,6 +812,12 @@ function Timer() {
       <audio ref={audioRef} preload="auto">
         <source src="/sounds/complete.mp3" type="audio/mpeg" />
         <source src="/sounds/complete.wav" type="audio/wav" />
+        Your browser does not support the audio element.
+      </audio>
+      
+      {/* Add pink noise audio element */}
+      <audio ref={pinkNoiseRef} preload="auto" loop>
+        <source src={PINK_NOISE_URLS[settingsInfo.pinkNoiseType]} type="audio/mpeg" />
         Your browser does not support the audio element.
       </audio>
       
