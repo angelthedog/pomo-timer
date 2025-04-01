@@ -622,6 +622,12 @@ function Timer() {
   const { totalSeconds, percentage } = calculateTimerValues();
   const timeDisplay = formatTime(secondsLeft);
 
+  // Add function to check if settings/stats should be enabled
+  const isSettingsAndStatsEnabled = () => {
+    // Only enable if timer is in init state, cancelled, or skipped
+    return !isTimerActiveRef.current && !sessionStartTimeRef.current;
+  };
+
   // Handle play/pause
   const handlePlayPause = useCallback((shouldPlay) => {
     if (shouldPlay) {
@@ -647,9 +653,6 @@ function Timer() {
       // Mark timer as active
       setIsTimerActive(true);
       isTimerActiveRef.current = true;
-      
-      // Disable Settings and Stats buttons when timer is running
-      console.log('Timer started, disabling Settings and Stats buttons');
     } else {
       setIsPaused(true);
       isPausedRef.current = true;
@@ -663,9 +666,6 @@ function Timer() {
       if (isAuthenticated) {
         handleTimerEvent(TIMER_EVENTS.PAUSED, modeRef.current);
       }
-      
-      // Enable Settings and Stats buttons when timer is paused
-      console.log('Timer paused, enabling Settings and Stats buttons');
     }
   }, [handleTimerEvent, startNewSession, modeRef, isAuthenticated, handlePinkNoisePlayback]);
 
@@ -787,13 +787,13 @@ function Timer() {
         <div style={{marginTop:'20px', display: 'flex', justifyContent: 'space-between'}}>
           <SettingsButton 
             onClick={handleSettingsClick} 
-            disabled={!isPaused}
-            tooltip={!isPaused ? "Pause timer first to access settings" : ""}
+            disabled={!isSettingsAndStatsEnabled()}
+            tooltip={!isSettingsAndStatsEnabled() ? "Timer must be reset to access settings" : ""}
           />
           <StatsButton 
             onClick={handleStatsClick}
-            disabled={!isPaused}
-            tooltip={!isPaused ? "Pause timer first to view stats" : ""}
+            disabled={!isSettingsAndStatsEnabled()}
+            tooltip={!isSettingsAndStatsEnabled() ? "Timer must be reset to view stats" : ""}
           />
         </div>
       )}
