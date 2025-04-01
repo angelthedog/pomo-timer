@@ -252,7 +252,7 @@ function Timer() {
 
     // Log the event only for authenticated users
     if (isAuthenticated) {
-      logTimerEvent('session_completed', {
+      logTimerEvent('completed', {
         mode: modeRef.current,
         duration: modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes * 60 : settingsInfo.breakMinutes * 60,
         elapsed: Math.floor((Date.now() - sessionStartTimeRef.current) / 1000)
@@ -267,9 +267,6 @@ function Timer() {
 
     // Switch to next mode and start it
     switchMode();
-    
-    // Clear any saved state
-    localStorage.removeItem('timerState');
   }, [logTimerEvent, settingsInfo.workMinutes, settingsInfo.breakMinutes, isAuthenticated, switchMode]);
 
   const skipCurrentSession = useCallback(() => {
@@ -400,60 +397,46 @@ function Timer() {
     console.log('Timer cancelled, enabling Settings and Stats buttons');
   }, [cancelCurrentSession]);
 
-  // Save timer state to localStorage
-  const saveTimerState = useCallback(() => {
-    const state = {
-      mode: modeRef.current,
-      secondsLeft: secondsLeftRef.current,
-      isPaused: isPausedRef.current,
-      sessionStartTime: sessionStartTimeRef.current,
-      isTimerActive: isTimerActiveRef.current,
-      timestamp: Date.now() // Add timestamp for accurate elapsed time calculation
-    };
-    
-      localStorage.setItem('timerState', JSON.stringify(state));
-    console.log('Timer state saved:', state);
+  // Save timer mode to localStorage
+  const saveTimerMode = useCallback(() => {
+    localStorage.setItem('timerMode', modeRef.current);
+    console.log('Timer mode saved:', modeRef.current);
   }, []);
 
-  // Restore timer state from localStorage
-  const restoreTimerState = useCallback(() => {
-      const savedState = localStorage.getItem('timerState');
-      if (savedState) {
-        const state = JSON.parse(savedState);
-        
-      // Only restore if the saved state is valid
-      if (state && typeof state.mode === 'string' && typeof state.secondsLeft === 'number') {
-          setMode(state.mode);
-          modeRef.current = state.mode;
-          
-            setSecondsLeft(state.secondsLeft);
-            secondsLeftRef.current = state.secondsLeft;
-            
-            setIsPaused(state.isPaused);
-            isPausedRef.current = state.isPaused;
-            
-              setSessionStartTime(state.sessionStartTime);
-              sessionStartTimeRef.current = state.sessionStartTime;
-              
-        setIsTimerActive(state.isTimerActive);
-        isTimerActiveRef.current = state.isTimerActive;
-        
-        console.log('Timer state restored:', state);
-            } else {
-        console.log('Invalid saved state, skipping restore');
-        localStorage.removeItem('timerState');
-      }
+  // Restore timer mode from localStorage
+  const restoreTimerMode = useCallback(() => {
+    const savedMode = localStorage.getItem('timerMode');
+    if (savedMode && (savedMode === TIMER_MODES.WORK || savedMode === TIMER_MODES.BREAK)) {
+      setMode(savedMode);
+      modeRef.current = savedMode;
+      console.log('Timer mode restored:', savedMode);
     }
   }, []);
+
+  // Handle page navigation
+  useEffect(() => {
+    // Restore timer mode on mount
+    restoreTimerMode();
+    
+    // Force a re-render after mounting to ensure UI is updated
+    setRenderKey(Date.now());
+    
+    // Save timer mode when navigating away
+    const handleRouteChange = () => {
+      saveTimerMode();
+    };
+    
+    router.events.on('routeChangeStart', handleRouteChange);
+    
+    return () => {
+      router.events.off('routeChangeStart', handleRouteChange);
+      // Save mode when unmounting
+      saveTimerMode();
+    };
+  }, [router, saveTimerMode, restoreTimerMode]);
 
   // Effect to initialize timer on first render
   useEffect(() => {
-    // Skip initialization if there's already a saved state AND user is authenticated
-    if (isAuthenticated && localStorage.getItem('timerState')) {
-      console.log('Found saved timer state for authenticated user, skipping initialization');
-      return;
-    }
-    
     // Skip initialization if there's an active session
     if (sessionStartTimeRef.current) {
       console.log('Active session in progress, skipping initialization');
@@ -557,9 +540,7 @@ function Timer() {
           mode: modeRef.current,
           newSeconds,
           workMinutes: settingsInfo.workMinutes,
-          breakMinutes: settingsInfo.breakMinutes,
-          pinkNoiseEnabled: settingsInfo.pinkNoiseEnabled,
-          pinkNoiseType: settingsInfo.pinkNoiseType
+          breakMinutes: settingsInfo.breakMinutes
         });
       }
 
@@ -605,38 +586,11 @@ function Timer() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        // Save state if timer was running
-        if (!isPausedRef.current && sessionStartTimeRef.current) {
-        console.log('Page became hidden, saving timer state');
-        saveTimerState();
-        }
+        // No need to save state - timer continues running in background
+        console.log('Page became hidden, timer continues in background');
       } else {
-        // When becoming visible, check if timer was running
-        const savedState = localStorage.getItem('timerState');
-        if (savedState) {
-          const state = JSON.parse(savedState);
-          if (!state.isPaused && state.sessionStartTime) {
-            // Calculate elapsed time while hidden
-            const elapsed = (Date.now() - state.timestamp) / 1000;
-            const secondsElapsed = Math.floor(elapsed);
-            const adjustedSecondsLeft = Math.max(0, state.secondsLeft - secondsElapsed);
-            
-            // Update timer state
-            setSecondsLeft(adjustedSecondsLeft);
-            secondsLeftRef.current = adjustedSecondsLeft;
-            
-            // If timer reached zero while away, handle completion
-            if (adjustedSecondsLeft === 0) {
-              completeCurrentSession();
-            }
-            
-            // Force UI update
-            setRenderKey(Date.now());
-          }
-        }
-        
-        // Clear saved state after handling it
-        localStorage.removeItem('timerState');
+        // No need to restore state - timer state is maintained in memory
+        console.log('Page became visible, timer state maintained in memory');
       }
     };
     
@@ -645,30 +599,7 @@ function Timer() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [saveTimerState, completeCurrentSession]);
-
-  // Handle page navigation
-  useEffect(() => {
-    // Restore timer state when component mounts
-    restoreTimerState();
-    
-    // Force a re-render after mounting to ensure UI is updated
-    setRenderKey(Date.now());
-    
-    // Save timer state when navigating away
-    const handleRouteChange = () => {
-      // Save timer state before navigating
-      saveTimerState();
-    };
-    
-    router.events.on('routeChangeStart', handleRouteChange);
-    
-    return () => {
-      router.events.off('routeChangeStart', handleRouteChange);
-      // Save state when component unmounts
-      saveTimerState();
-    };
-  }, [router, saveTimerState, restoreTimerState]);
+  }, []);
 
   // Calculate totalSeconds and percentage right before rendering to ensure they're up-to-date
   const calculateTimerValues = () => {
