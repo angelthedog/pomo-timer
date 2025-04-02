@@ -142,12 +142,7 @@ function Timer() {
     // Mark timer as active
     setIsTimerActive(true);
     isTimerActiveRef.current = true;
-    
-    // Log start event if authenticated
-    if (isAuthenticated) {
-      handleTimerEvent(TIMER_EVENTS.STARTED, modeRef.current);
-    }
-  }, [handleTimerEvent, modeRef, isAuthenticated]);
+  }, []);
 
   // Handle pink noise playback
   const handlePinkNoisePlayback = useCallback((shouldPlay) => {
@@ -333,55 +328,6 @@ function Timer() {
     handlePinkNoisePlayback(false);
   }, [settingsInfo]);
 
-  const resetTimer = useCallback(() => {
-    // Complete current session if one is in progress
-    if (sessionStartTimeRef.current && !isPausedRef.current) {
-      // Calculate elapsed time
-      const elapsedSeconds = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
-      
-      // Log completion with actual duration if authenticated
-      if (isAuthenticated) {
-        handleTimerEvent(TIMER_EVENTS.COMPLETED, modeRef.current, elapsedSeconds);
-      }
-      
-      // Reset session start time
-      setSessionStartTime(null);
-      sessionStartTimeRef.current = null;
-      
-      console.log(`Session completed during reset: ${modeRef.current}, Duration: ${elapsedSeconds} seconds`);
-    }
-    
-    // Reset timer to current mode with new duration
-    const newSeconds = minutesToSeconds(
-      modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-    );
-    
-    setSecondsLeft(newSeconds);
-    secondsLeftRef.current = newSeconds;
-    
-    // Pause timer
-    setIsPaused(true);
-    isPausedRef.current = true;
-    
-    // Reset session start time
-    setSessionStartTime(null);
-    sessionStartTimeRef.current = null;
-    
-    // Mark timer as inactive
-    setIsTimerActive(false);
-    isTimerActiveRef.current = false;
-    
-    // Force a re-render by updating the render key
-    setRenderKey(Date.now());
-    
-    console.log('Timer reset with new settings:', {
-      mode: modeRef.current,
-      seconds: newSeconds,
-      workMinutes: settingsInfo.workMinutes,
-      breakMinutes: settingsInfo.breakMinutes
-    });
-  }, [settingsInfo, isAuthenticated, handleTimerEvent]);
-
   // Fast forward to next session
   const handleFastForward = useCallback(() => {
     if (!sessionStartTimeRef.current) return;
@@ -478,46 +424,43 @@ function Timer() {
 
   // Effect to update timer when settings load
   useEffect(() => {
-    // This effect runs whenever settingsInfo.workMinutes or settingsInfo.breakMinutes changes
-    // or when isAuthenticated or settingsInfo.isLoading changes
-    
-    // Only proceed if settings are loaded (not loading) and user is authenticated
-    if (!settingsInfo.isLoading && isAuthenticated) {
-      // Don't reset if there's an active session
-      if (sessionStartTimeRef.current) {
-        console.log('Active session in progress, not updating timer with database values');
-        return;
+    if (!settingsInfo.isLoading) {
+      // If there's an active session, complete it first
+      if (sessionStartTimeRef.current && !isPausedRef.current) {
+        completeCurrentSession();
+      } else {
+        // If no active session, just reset the timer with new settings
+        const newSeconds = minutesToSeconds(
+          modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
+        );
+        
+        setSecondsLeft(newSeconds);
+        secondsLeftRef.current = newSeconds;
+        
+        // Pause timer
+        setIsPaused(true);
+        isPausedRef.current = true;
+        
+        // Reset session start time
+        setSessionStartTime(null);
+        sessionStartTimeRef.current = null;
+        
+        // Mark timer as inactive
+        setIsTimerActive(false);
+        isTimerActiveRef.current = false;
+        
+        // Force a re-render by updating the render key
+        setRenderKey(Date.now());
+        
+        console.log('Timer reset with new settings:', {
+          mode: modeRef.current,
+          seconds: newSeconds,
+          workMinutes: settingsInfo.workMinutes,
+          breakMinutes: settingsInfo.breakMinutes
+        });
       }
-      
-      console.log('Settings loaded from database, updating timer with database values:', {
-        workMinutes: settingsInfo.workMinutes,
-        breakMinutes: settingsInfo.breakMinutes
-      });
-      
-      // Always update the timer with the current mode's duration from database
-      const databaseSeconds = minutesToSeconds(
-        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-      );
-      
-      // IMPORTANT: Update both the state and the ref to ensure consistency
-      setSecondsLeft(databaseSeconds);
-      secondsLeftRef.current = databaseSeconds;
-      
-      // Update the refs to track the new settings
-      prevWorkMinutesRef.current = settingsInfo.workMinutes;
-      prevBreakMinutesRef.current = settingsInfo.breakMinutes;
-      
-      // Force a re-render to update the UI
-      setRenderKey(Date.now());
-      
-      console.log('Timer updated with database values:', {
-        mode: modeRef.current,
-        seconds: databaseSeconds,
-        workMinutes: settingsInfo.workMinutes,
-        breakMinutes: settingsInfo.breakMinutes
-      });
     }
-  }, [settingsInfo.isLoading, isAuthenticated, settingsInfo.workMinutes, settingsInfo.breakMinutes]);
+  }, [settingsInfo.isLoading, settingsInfo.workMinutes, settingsInfo.breakMinutes, completeCurrentSession]);
 
   // Effect to handle settings updates
   useEffect(() => {
@@ -637,9 +580,6 @@ function Timer() {
         // If no session is in progress, start a new one
         if (!sessionStartTimeRef.current) {
           startNewSession();
-        } else if (isAuthenticated) {
-          // Otherwise, resume existing session if authenticated
-          handleTimerEvent(TIMER_EVENTS.RESUMED, modeRef.current);
         }
       }
       
@@ -662,13 +602,8 @@ function Timer() {
       if (isAuthenticated) {
         handlePinkNoisePlayback(false);
       }
-      
-      // Log pause event if authenticated
-      if (isAuthenticated) {
-        handleTimerEvent(TIMER_EVENTS.PAUSED, modeRef.current);
-      }
     }
-  }, [handleTimerEvent, startNewSession, modeRef, isAuthenticated, handlePinkNoisePlayback]);
+  }, [startNewSession, isAuthenticated, handlePinkNoisePlayback]);
 
   const handleSettingsClick = () => {
     // Show settings modal
