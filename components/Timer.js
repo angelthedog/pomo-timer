@@ -247,11 +247,9 @@ function Timer() {
 
     // Log the event only for authenticated users
     if (isAuthenticated) {
-      logTimerEvent('completed', {
-        mode: modeRef.current,
-        duration: modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes * 60 : settingsInfo.breakMinutes * 60,
-        elapsed: Math.floor((Date.now() - sessionStartTimeRef.current) / 1000)
-      });
+      logTimerEvent(TIMER_EVENTS.COMPLETED, modeRef.current, 
+        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes * 60 : settingsInfo.breakMinutes * 60
+      );
     }
 
     // Show feedback modal for work sessions
@@ -529,11 +527,17 @@ function Timer() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        // No need to save state - timer continues running in background
-        console.log('Page became hidden, timer continues in background');
+        // Save current mode to localStorage before page becomes hidden
+        localStorage.setItem('timerMode', modeRef.current);
+        console.log('Page became hidden, saved mode:', modeRef.current);
       } else {
-        // No need to restore state - timer state is maintained in memory
-        console.log('Page became visible, timer state maintained in memory');
+        // Restore mode from localStorage when page becomes visible
+        const savedMode = localStorage.getItem('timerMode');
+        if (savedMode && (savedMode === TIMER_MODES.WORK || savedMode === TIMER_MODES.BREAK)) {
+          setMode(savedMode);
+          modeRef.current = savedMode;
+          console.log('Page became visible, restored mode:', savedMode);
+        }
       }
     };
     
