@@ -245,11 +245,9 @@ function Timer() {
       console.error('Error creating audio:', err);
     }
 
-    // Log the event only for authenticated users
-    if (isAuthenticated) {
-      logTimerEvent(TIMER_EVENTS.COMPLETED, modeRef.current, 
-        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes * 60 : settingsInfo.breakMinutes * 60
-      );
+    // Log completion event only for authenticated users
+    if (isAuthenticated && modeRef.current === TIMER_MODES.WORK) {
+      logTimerEvent(TIMER_EVENTS.COMPLETED, modeRef.current, settingsInfo.workMinutes * 60);
     }
 
     // Show feedback modal for work sessions
@@ -260,12 +258,11 @@ function Timer() {
 
     // Switch to next mode and start it
     switchMode();
-  }, [logTimerEvent, settingsInfo.workMinutes, settingsInfo.breakMinutes, isAuthenticated, switchMode]);
+  }, [logTimerEvent, settingsInfo.workMinutes, isAuthenticated, switchMode]);
 
   const skipCurrentSession = useCallback(() => {
     if (!sessionStartTimeRef.current) return;
     
-    // First do everything that cancelCurrentSession does
     // Reset session start time
     setSessionStartTime(null);
     sessionStartTimeRef.current = null;
