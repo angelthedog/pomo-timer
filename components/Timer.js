@@ -50,6 +50,31 @@ function Timer() {
   // Add a ref to store state when switching focus
   const storedStateRef = useRef(null);
 
+  // Add an effect to update pink noise source when settings change
+  useEffect(() => {
+    if (isAuthenticated && settingsInfo.pinkNoiseEnabled && pinkNoiseRef.current) {
+      const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
+      console.log('Updating pink noise source to:', audioUrl);
+      
+      // Only update if the source has changed
+      if (pinkNoiseRef.current.src !== audioUrl) {
+        pinkNoiseRef.current.src = audioUrl;
+        
+        // If pink noise is currently playing, restart it with the new source
+        if (isPinkNoisePlayingRef.current) {
+          console.log('Restarting pink noise with new source');
+          pinkNoiseRef.current.play()
+            .then(() => {
+              console.log('Pink noise restarted successfully with new source');
+            })
+            .catch(err => {
+              console.error('Error restarting pink noise with new source:', err);
+            });
+        }
+      }
+    }
+  }, [isAuthenticated, settingsInfo.pinkNoiseEnabled, settingsInfo.pinkNoiseType]);
+
   // Add a function to test the sound
   const testSound = useCallback(() => {
     if (audioRef.current) {
@@ -143,17 +168,21 @@ function Timer() {
         pinkNoiseRef.current = new Audio(PINK_NOISE_URLS[settingsInfo.pinkNoiseType]);
         pinkNoiseRef.current.loop = true;
       } else {
-        // Update audio source to match current settings
+        // Always update audio source to match current settings
         const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
         console.log('Playing pink noise with URL:', audioUrl);
         
-        if (pinkNoiseRef.current.src !== audioUrl) {
-          pinkNoiseRef.current.src = audioUrl;
-        }
+        // Always update the source to ensure it's using the latest settings
+        pinkNoiseRef.current.src = audioUrl;
+        
+        // Ensure loop is set to true
+        pinkNoiseRef.current.loop = true;
       }
       
       // Start playing pink noise with current settings
       if (pinkNoiseRef.current) {
+        pinkNoiseRef.current.volume = 0.8;
+        
         pinkNoiseRef.current.play()
           .then(() => {
             isPinkNoisePlayingRef.current = true;
@@ -567,10 +596,24 @@ function Timer() {
         if (isAuthenticated && settingsInfo.pinkNoiseEnabled && 
             storedStateRef.current && storedStateRef.current.isPinkNoisePlaying) {
           console.log('Restarting pink noise after focus switch');
-          // Add a small delay to ensure the audio element is ready
-          setTimeout(() => {
-            handlePinkNoisePlayback(true);
-          }, 300);
+          
+          // Check if pink noise is already playing
+          if (pinkNoiseRef.current && !pinkNoiseRef.current.paused) {
+            console.log('Pink noise is already playing, no need to restart');
+          } else {
+            // Add a small delay to ensure the audio element is ready
+            setTimeout(() => {
+              // Ensure loop is set to true
+              if (pinkNoiseRef.current) {
+                pinkNoiseRef.current.loop = true;
+                
+                // Always update the source to ensure it's using the latest settings
+                const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
+                pinkNoiseRef.current.src = audioUrl;
+              }
+              handlePinkNoisePlayback(true);
+            }, 500);
+          }
         } else {
           console.log('Not restarting pink noise:', {
             isAuthenticated,
