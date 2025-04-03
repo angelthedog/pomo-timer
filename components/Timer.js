@@ -592,34 +592,36 @@ function Timer() {
         // We don't need to adjust the timer state when the page becomes visible again
         // The timer state is already correctly maintained in memory
         
-        // Only restart pink noise if it was playing before and timer is still active and not paused
-        if (isAuthenticated && settingsInfo.pinkNoiseEnabled && 
-            storedStateRef.current && storedStateRef.current.isPinkNoisePlaying) {
+        // Simplified condition: only check if user is authenticated and pink noise is enabled
+        if (isAuthenticated && settingsInfo.pinkNoiseEnabled) {
           console.log('Restarting pink noise after focus switch');
           
-          // Check if pink noise is already playing
-          if (pinkNoiseRef.current && !pinkNoiseRef.current.paused) {
-            console.log('Pink noise is already playing, no need to restart');
-          } else {
-            // Add a small delay to ensure the audio element is ready
-            setTimeout(() => {
-              // Ensure loop is set to true
-              if (pinkNoiseRef.current) {
-                pinkNoiseRef.current.loop = true;
-                
-                // Always update the source to ensure it's using the latest settings
-                const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
-                pinkNoiseRef.current.src = audioUrl;
-              }
-              handlePinkNoisePlayback(true);
-            }, 500);
-          }
+          // Always restart pink noise when the page becomes visible again
+          // Add a small delay to ensure the audio element is ready
+          setTimeout(() => {
+            // Ensure loop is set to true
+            if (pinkNoiseRef.current) {
+              pinkNoiseRef.current.loop = true;
+              
+              // Always update the source to ensure it's using the latest settings
+              const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
+              pinkNoiseRef.current.src = audioUrl;
+            }
+            handlePinkNoisePlayback(true);
+            
+            // Reset the hidden time and clear stored state after restarting pink noise
+            lastHiddenTimeRef.current = null;
+            storedStateRef.current = null;
+          }, 500);
         } else {
           console.log('Not restarting pink noise:', {
             isAuthenticated,
-            pinkNoiseEnabled: settingsInfo.pinkNoiseEnabled,
-            wasPlaying: storedStateRef.current ? storedStateRef.current.isPinkNoisePlaying : false
+            pinkNoiseEnabled: settingsInfo.pinkNoiseEnabled
           });
+          
+          // Reset the hidden time and clear stored state since we're not restarting pink noise
+          lastHiddenTimeRef.current = null;
+          storedStateRef.current = null;
         }
         
         // Log the current state
@@ -630,11 +632,6 @@ function Timer() {
           mode: modeRef.current,
           sessionStartTime: sessionStartTimeRef.current
         });
-        
-        // Reset the hidden time
-        lastHiddenTimeRef.current = null;
-        // Clear stored state
-        storedStateRef.current = null;
       }
     };
 
