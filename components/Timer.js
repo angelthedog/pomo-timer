@@ -13,7 +13,6 @@ import { logTimerEvent } from '../utils/api';
 import { TIMER_MODES, TIMER_EVENTS, COLORS, UI, PINK_NOISE_URLS, TIMER_SETTINGS } from '../utils/constants';
 import { formatTime, calculatePercentage, minutesToSeconds } from '../utils/helpers';
 import { useRouter } from 'next/router';
-import FeedbackModal from './FeedbackModal';
 
 function Timer() {
   const router = useRouter();
@@ -27,8 +26,6 @@ function Timer() {
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [renderKey, setRenderKey] = useState(Date.now());
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [currentSessionId, setCurrentSessionId] = useState(null);
   
   // Create a ref for the audio element
   const audioRef = useRef(null);
@@ -115,7 +112,6 @@ function Timer() {
       }
       
       const data = await response.json();
-      setCurrentSessionId(data.sessionId);
       console.log('Work session logged with duration:', duration);
     } catch (error) {
       console.error('Error logging work session:', error);
@@ -238,12 +234,6 @@ function Timer() {
       logTimerEvent(TIMER_EVENTS.COMPLETED, null, totalDuration);
     }
 
-    // Show feedback modal for work sessions
-    if (modeRef.current === TIMER_MODES.WORK && isAuthenticated) {
-      setShowFeedbackModal(true);
-      setCurrentSessionId(Date.now().toString());
-    }
-
     // Switch to next mode and start it
     switchMode();
   }, [logTimerEvent, settingsInfo.workMinutes, isAuthenticated, switchMode]);
@@ -317,7 +307,7 @@ function Timer() {
 
     // Stop pink noise
     handlePinkNoisePlayback(false);
-  }, [settingsInfo]);
+  }, [settingsInfo, handlePinkNoisePlayback]);
 
   // Fast forward to next session
   const handleFastForward = useCallback(() => {
@@ -566,7 +556,8 @@ function Timer() {
   // Add function to check if settings/stats should be enabled
   const isSettingsAndStatsEnabled = () => {
     // Only enable if timer is in init state, cancelled, or skipped
-    return !isTimerActiveRef.current && !sessionStartTimeRef.current;
+    // Also disable if timer is naturally completed (secondsLeft is 0)
+    return !isTimerActiveRef.current && !sessionStartTimeRef.current && secondsLeftRef.current > 0;
   };
 
   // Handle play/pause
@@ -610,44 +601,6 @@ function Timer() {
   const handleStatsClick = () => {
     if (isAuthenticated) {
       router.push('/stats');
-    }
-  };
-
-  // Add this function to handle feedback submission
-  const handleFeedbackSubmit = async (sessionId, rating) => {
-    if (!isAuthenticated) return;
-    
-    try {
-      console.log(`Submitting feedback: ${rating} stars for session ${sessionId}`);
-      
-      const response = await fetch('/api/timer/feedback', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId,
-          feedback: rating
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error response:', errorData);
-        throw new Error('Failed to submit feedback');
-      }
-      
-      const data = await response.json();
-      console.log('Feedback submitted successfully:', data);
-      
-      // Add a delay before closing the modal and switching modes
-      setTimeout(() => {
-        setShowFeedbackModal(false);
-        // Switch modes after feedback is submitted
-        switchMode();
-      }, UI.AUTO_CLOSE_DELAY);
-    } catch (error) {
-      console.error('Error submitting feedback:', error);
     }
   };
 
@@ -759,14 +712,6 @@ function Timer() {
           Sign in to access settings, stats, and custom timers
         </div>
       )}
-      
-      {/* Add the feedback modal */}
-      <FeedbackModal
-        isOpen={showFeedbackModal}
-        onClose={() => setShowFeedbackModal(false)}
-        onSubmit={handleFeedbackSubmit}
-        sessionId={currentSessionId}
-      />
       
       <style jsx>{`
         .auth-message {

@@ -10,12 +10,6 @@ const SessionSchema = new mongoose.Schema(
     duration: {
       type: Number, // in seconds
       required: true,
-    },
-    feedback: {
-      type: Number,
-      min: 1,
-      max: 5,
-      default: null,
     }
   },
   { timestamps: true }
