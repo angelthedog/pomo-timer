@@ -19,21 +19,18 @@ export const logTimerEvent = async (event, mode, duration = null) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        event,
-        timestamp: Date.now(),
-        mode,
         duration
       }),
       credentials: 'include'
     });
     
+    const data = await response.json();
+    
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Error response from timer log API:', errorData);
-      throw new Error(errorData.message || 'Failed to log timer event');
+      console.error('Error response from timer log API:', data);
+      throw new Error(data.message || 'Failed to log timer event');
     }
     
-    const data = await response.json();
     return data;
   } catch (error) {
     console.error('Error logging timer event:', error);

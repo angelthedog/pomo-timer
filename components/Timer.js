@@ -96,21 +96,16 @@ function Timer() {
     setSecondsLeft(secondsLeftRef.current);
   }, []);
 
-  const handleTimerEvent = useCallback(async (event, mode, duration = null) => {
+  const handleTimerEvent = useCallback(async (event, mode, duration) => {
     if (!isAuthenticated) return;
     
     try {
-      const timestamp = Date.now();
-      
       const response = await fetch('/api/timer/log', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          event,
-          timestamp,
-          mode,
           duration
         }),
       });
@@ -120,16 +115,10 @@ function Timer() {
       }
       
       const data = await response.json();
-      
-      // Store the session ID when a session is started
-      if (event === TIMER_EVENTS.STARTED) {
-        console.log('Session started with ID:', data.sessionId);
-        setCurrentSessionId(data.sessionId);
-      }
-      
-      console.log(`Timer event logged: ${event}`);
+      setCurrentSessionId(data.sessionId);
+      console.log('Work session logged with duration:', duration);
     } catch (error) {
-      console.error('Error logging timer event:', error);
+      console.error('Error logging work session:', error);
     }
   }, [isAuthenticated]);
 
@@ -231,11 +220,8 @@ function Timer() {
   const completeCurrentSession = useCallback(() => {
     // Play completion sound immediately
     try {
-      // Create a new Audio object each time for more reliable playback
       const sound = new Audio('/sounds/complete.mp3');
       sound.volume = 1.0;
-      
-      // Try to play the sound immediately
       sound.play()
         .then(() => console.log('Completion sound played successfully'))
         .catch(err => {
@@ -245,9 +231,11 @@ function Timer() {
       console.error('Error creating audio:', err);
     }
 
-    // Log completion event only for authenticated users
+    // Log work session completion (natural completion)
     if (isAuthenticated && modeRef.current === TIMER_MODES.WORK) {
-      logTimerEvent(TIMER_EVENTS.COMPLETED, modeRef.current, settingsInfo.workMinutes * 60);
+      // For natural completion, use total configured duration
+      const totalDuration = minutesToSeconds(settingsInfo.workMinutes);
+      logTimerEvent(TIMER_EVENTS.COMPLETED, null, totalDuration);
     }
 
     // Show feedback modal for work sessions
@@ -262,6 +250,14 @@ function Timer() {
 
   const skipCurrentSession = useCallback(() => {
     if (!sessionStartTimeRef.current) return;
+    
+    // Log work session completion (skipped)
+    if (isAuthenticated && modeRef.current === TIMER_MODES.WORK) {
+      // For skipped completion, calculate actual duration (total - remaining)
+      const totalDuration = minutesToSeconds(settingsInfo.workMinutes);
+      const actualDuration = totalDuration - secondsLeftRef.current;
+      logTimerEvent(TIMER_EVENTS.COMPLETED, null, actualDuration);
+    }
     
     // Reset session start time
     setSessionStartTime(null);
@@ -293,7 +289,7 @@ function Timer() {
     handlePinkNoisePlayback(false);
     
     console.log('Session skipped, switched to next mode:', nextMode);
-  }, [settingsInfo, modeRef, handlePinkNoisePlayback]);
+  }, [settingsInfo, modeRef, handlePinkNoisePlayback, isAuthenticated, logTimerEvent]);
 
   const cancelCurrentSession = useCallback(() => {
     // Don't log the session, just reset the timer
