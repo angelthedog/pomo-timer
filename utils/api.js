@@ -20,15 +20,19 @@ export const logTimerEvent = async (event, mode, duration = null, feedback = nul
   try {
     console.log(`Logging completed work session: ${duration} seconds${feedback ? `, feedback: ${feedback}` : ''}`);
     
+    // Log the data being sent to the API
+    const requestData = {
+      duration,
+      feedback
+    };
+    console.log('Sending data to API:', requestData);
+    
     const response = await fetch('/api/timer/log', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        duration,
-        feedback
-      }),
+      body: JSON.stringify(requestData),
       credentials: 'include'
     });
     
@@ -39,6 +43,7 @@ export const logTimerEvent = async (event, mode, duration = null, feedback = nul
       throw new Error(data.message || 'Failed to log work session');
     }
     
+    console.log('API response:', data);
     return data;
   } catch (error) {
     console.error('Error logging work session:', error);

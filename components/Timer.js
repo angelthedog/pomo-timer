@@ -285,11 +285,15 @@ function Timer() {
   const handleFeedbackSubmit = useCallback(async (rating) => {
     if (pendingSessionData) {
       try {
+        console.log('Submitting feedback:', rating);
+        console.log('Pending session data:', pendingSessionData);
+        
+        // Pass the star rating (1-5) as feedback
         await logTimerEvent(
           TIMER_EVENTS.COMPLETED,
           TIMER_MODES.WORK,
           pendingSessionData.duration,
-          rating
+          rating // This will be a number from 1-5
         );
         console.log('Work session logged with feedback:', rating);
       } catch (error) {
@@ -302,11 +306,15 @@ function Timer() {
 
   const handleFeedbackSkip = useCallback(() => {
     if (pendingSessionData) {
+      console.log('Skipping feedback');
+      console.log('Pending session data:', pendingSessionData);
+      
+      // Pass null as feedback when skipped
       logTimerEvent(
         TIMER_EVENTS.COMPLETED,
         TIMER_MODES.WORK,
         pendingSessionData.duration,
-        null
+        null // Explicitly pass null when skipped
       ).catch(error => {
         console.error('Error logging work session:', error);
       });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StarIcon } from '@heroicons/react/24/solid';
 import { StarIcon as StarOutlineIcon } from '@heroicons/react/24/outline';
 
@@ -9,6 +9,23 @@ import { StarIcon as StarOutlineIcon } from '@heroicons/react/24/outline';
 const FeedbackModal = ({ onSubmit, onSkip }) => {
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(3);
+
+  // Auto-dismiss after 3 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          onSkip();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [onSkip]);
 
   const handleRatingClick = (value) => {
     setRating(value);
@@ -38,7 +55,7 @@ const FeedbackModal = ({ onSubmit, onSkip }) => {
         </div>
         <div className="feedback-actions">
           <button className="skip-button" onClick={onSkip}>
-            Skip
+            Skip ({timeLeft}s)
           </button>
         </div>
       </div>
