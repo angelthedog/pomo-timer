@@ -552,6 +552,7 @@ function Timer() {
       mode === TIMER_MODES.WORK ? workMinutes : breakMinutes
     );
     
+    // Set both state and ref to ensure consistency
     setSecondsLeft(initialSeconds);
     secondsLeftRef.current = initialSeconds;
     
