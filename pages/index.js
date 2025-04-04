@@ -14,7 +14,7 @@ export default function Home() {
       <Head>
         <title>Focus Mind</title>
         <meta name="description" content="A simple Focus Mind app" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/focusMind.png" />
       </Head>
 
       {showSettings && isAuthenticated ? <Settings /> : <Timer />}

@@ -158,29 +158,29 @@ export default function SignIn() {
         
         input:focus {
           outline: none;
-          border-color: #4aec8c;
+          border-color: rgba(255, 255, 255, 0.8);
         }
         
         .submit-button {
           width: 100%;
           padding: 0.75rem;
-          background-color: #4aec8c;
-          color: #30384b;
-          border: none;
+          background-color: #30384b;
+          color: white;
+          border: 1px solid rgba(255, 255, 255, 0.5);
           border-radius: 4px;
           font-size: 1rem;
           font-weight: bold;
           cursor: pointer;
-          transition: background-color 0.3s ease;
+          transition: all 0.3s ease;
           margin-top: 1rem;
         }
         
         .submit-button:hover {
-          background-color: #3dd67a;
+          background-color: rgba(255, 255, 255, 0.1);
         }
         
         .submit-button:disabled {
-          background-color: #ccc;
+          opacity: 0.6;
           cursor: not-allowed;
         }
         
@@ -191,13 +191,18 @@ export default function SignIn() {
         }
         
         .auth-link {
-          color: #4aec8c;
+          color: white;
           background: none;
           border: none;
           padding: 0;
           font: inherit;
           cursor: pointer;
           text-decoration: underline;
+          transition: opacity 0.3s ease;
+        }
+
+        .auth-link:hover {
+          opacity: 0.8;
         }
       `}</style>
     </>

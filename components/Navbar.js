@@ -43,7 +43,10 @@ function Navbar() {
   return (
     <nav className="navbar">
       <div className="navbar-brand">
-        <a href="/" className="logo">Focus Mind</a>
+        <a href="/" className="logo">
+          <img src="/focusMind.png" alt="Focus Mind Icon" className="brand-icon" />
+          <img src="/focusMindText.png" alt="Focus Mind" className="brand-text-logo" />
+        </a>
       </div>
 
       <div className="navbar-menu">
@@ -133,18 +136,41 @@ function Navbar() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 1rem 2rem;
-          background-color: rgba(0, 0, 0, 0.2);
+          padding: 0.8rem 1.5rem;
+          background: rgba(0, 0, 0, 0.2);
           position: relative;
           z-index: 10;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar-brand {
+          display: flex;
+          align-items: center;
         }
 
         .logo {
-          font-size: 1.5rem;
-          font-weight: bold;
-          color: white;
-          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
           text-decoration: none;
+          color: inherit;
+          transition: opacity 0.3s ease;
+        }
+
+        .logo:hover {
+          opacity: 0.9;
+        }
+
+        .brand-icon {
+          height: 32px;
+          width: auto;
+          filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+        }
+
+        .brand-text-logo {
+          height: 24px;
+          width: auto;
+          filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
         }
 
         .navbar-menu {
@@ -173,14 +199,15 @@ function Navbar() {
         }
 
         .signup-button, .signout-button {
-          background-color: #4aec8c;
-          border: none;
-          color: #30384b;
-          padding: 0.5rem 1rem;
+          background-color: #30384b;
+          border: 1px solid rgba(255, 255, 255, 0.5);
+          color: white;
+          padding: 0.4rem 0.8rem;
           border-radius: 4px;
           cursor: pointer;
           font-weight: bold;
           transition: all 0.3s ease;
+          font-size: 0.9rem;
         }
 
         .signin-button:hover, .profile-button:hover {
@@ -188,11 +215,11 @@ function Navbar() {
         }
 
         .signup-button:hover {
-          background-color: #3dd67a;
+          background-color: rgba(255, 255, 255, 0.1);
         }
 
         .signout-button:hover {
-          background-color: #f54e4e;
+          background-color: rgba(255, 255, 255, 0.1);
           color: white;
         }
 
@@ -211,6 +238,10 @@ function Navbar() {
         }
 
         @media (max-width: 768px) {
+          .navbar {
+            padding: 0.6rem 1rem;
+          }
+
           .navbar-menu {
             display: none;
           }
@@ -240,6 +271,14 @@ function Navbar() {
           .mobile-menu button {
             width: 100%;
             margin-bottom: 0.5rem;
+          }
+
+          .brand-icon {
+            height: 28px;
+          }
+
+          .brand-text-logo {
+            height: 20px;
           }
         }
       `}</style>
