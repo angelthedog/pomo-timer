@@ -112,7 +112,7 @@ export default function Stats() {
             <div className="stat-card">
               <h3>Longest Streak</h3>
               <p className="stat-value">{stats.longestStreak} sessions</p>
-              <p className="streak-info">Consecutive work sessions with less than 30 min breaks</p>
+              <p className="streak-info">in a single day</p>
             </div>
             
             <div className="stat-card">
@@ -131,21 +131,12 @@ export default function Stats() {
             <div className="stat-card">
               <h3>Average Daily Work Time</h3>
               <p className="stat-value">
-                {stats.dailyStats && stats.dailyStats.some(day => day.totalMinutes > 0) ? (
-                  formatTimeHM(
-                    Math.round(
-                      stats.dailyStats.reduce((sum, day) => sum + day.totalMinutes, 0) / 
-                      stats.dailyStats.filter(day => day.totalMinutes > 0).length * 60
-                    )
-                  )
-                ) : (
-                  '0h 0m'
-                )}
+                {formatTimeHM(stats.averageDailyWorkTime)}
               </p>
             </div>
             
             <div className="stat-card full-width">
-              <h3>Last 6 Days (Work Sessions)</h3>
+              <h3>Last 7 Days (Work Sessions)</h3>
               {stats.dailyStats ? (
                 <div className="daily-chart">
                   {stats.dailyStats.map((day, index) => {
@@ -175,10 +166,10 @@ export default function Stats() {
                         </div>
                         <div className="day-info">
                           <div className="day-label">
-                            {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                            {new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
                           </div>
                           <div className="day-date">
-                            {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </div>
                         </div>
                       </div>
@@ -191,7 +182,7 @@ export default function Stats() {
             </div>
             
             <div className="stat-card full-width">
-              <h3>Last 6 Days (Productivity Ratings)</h3>
+              <h3>Last 7 Days (Productivity Ratings)</h3>
               {stats.dailyStats && stats.dailyStats.some(day => day.averageFeedback > 0) ? (
                 <div className="daily-chart">
                   {stats.dailyStats.map((day, index) => {
@@ -221,10 +212,10 @@ export default function Stats() {
                         </div>
                         <div className="day-info">
                           <div className="day-label">
-                            {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                            {new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
                           </div>
                           <div className="day-date">
-                            {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </div>
                         </div>
                       </div>

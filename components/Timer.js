@@ -9,6 +9,7 @@ import FastForwardButton from "./FastForwardButton";
 import CancelButton from "./CancelButton";
 import SettingsButton from "./SettingsButton";
 import StatsButton from "./StatsButton";
+import FeedbackModal from "./FeedbackModal";
 import { logTimerEvent } from '../utils/api';
 import { TIMER_MODES, TIMER_EVENTS, COLORS, UI, PINK_NOISE_URLS, TIMER_SETTINGS } from '../utils/constants';
 import { formatTime, calculatePercentage, minutesToSeconds } from '../utils/helpers';
@@ -28,6 +29,8 @@ function Timer() {
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [renderKey, setRenderKey] = useState(Date.now());
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [pendingSessionData, setPendingSessionData] = useState(null);
   
   // Create a ref for the audio element
   const audioRef = useRef(null);
@@ -279,22 +282,67 @@ function Timer() {
     }
   }, []);
 
+  const handleFeedbackSubmit = useCallback(async (rating) => {
+    if (pendingSessionData) {
+      try {
+        console.log('Submitting feedback:', rating);
+        console.log('Pending session data:', pendingSessionData);
+        
+        // Pass the star rating (1-5) as feedback
+        await logTimerEvent(
+          TIMER_EVENTS.COMPLETED,
+          TIMER_MODES.WORK,
+          pendingSessionData.duration,
+          rating // This will be a number from 1-5
+        );
+        console.log('Work session logged with feedback:', rating);
+      } catch (error) {
+        console.error('Error logging work session with feedback:', error);
+      }
+    }
+    setShowFeedback(false);
+    setPendingSessionData(null);
+  }, [pendingSessionData]);
+
+  const handleFeedbackSkip = useCallback(() => {
+    if (pendingSessionData) {
+      console.log('Skipping feedback');
+      console.log('Pending session data:', pendingSessionData);
+      
+      // Pass null as feedback when skipped
+      logTimerEvent(
+        TIMER_EVENTS.COMPLETED,
+        TIMER_MODES.WORK,
+        pendingSessionData.duration,
+        null // Explicitly pass null when skipped
+      ).catch(error => {
+        console.error('Error logging work session:', error);
+      });
+    }
+    setShowFeedback(false);
+    setPendingSessionData(null);
+  }, [pendingSessionData]);
+
   const completeCurrentSession = useCallback(() => {
     // Play completion sound for all session completions
     playCompletionSound();
     
-    // Log session completion if authenticated
-    if (isAuthenticated) {
+    // Only log completed work sessions to the database
+    if (isAuthenticated && modeRef.current === TIMER_MODES.WORK) {
       // Calculate the total duration based on current mode and settings
-      const totalDuration = minutesToSeconds(
-        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-      );
+      const totalDuration = minutesToSeconds(settingsInfo.workMinutes);
       
-      console.log('Session completed:', {
-        mode: modeRef.current,
+      console.log('Work session completed:', {
         duration: totalDuration,
         completedAt: new Date().toISOString()
       });
+
+      // Show feedback modal instead of logging directly
+      setPendingSessionData({
+        duration: totalDuration,
+        completedAt: new Date().toISOString()
+      });
+      setShowFeedback(true);
     }
     
     // Store current pink noise state before switching modes
@@ -327,18 +375,22 @@ function Timer() {
     
     // Add a small delay to ensure the sound plays completely before changing state
     setTimeout(() => {
-      // Log session skip if authenticated
-      if (isAuthenticated) {
-        // Calculate the total duration based on current mode and settings
-        const totalDuration = minutesToSeconds(
-          modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-        );
+      // Log session skip if authenticated and it's a work session
+      if (isAuthenticated && modeRef.current === TIMER_MODES.WORK) {
+        // Calculate the actual duration spent in this session
+        const actualDuration = minutesToSeconds(settingsInfo.workMinutes) - secondsLeftRef.current;
         
-        console.log('Session skipped:', {
-          mode: modeRef.current,
-          duration: totalDuration - secondsLeftRef.current,
+        console.log('Work session skipped:', {
+          duration: actualDuration,
           completedAt: new Date().toISOString()
         });
+
+        // Show feedback modal instead of logging directly
+        setPendingSessionData({
+          duration: actualDuration,
+          completedAt: new Date().toISOString()
+        });
+        setShowFeedback(true);
       }
       
       // Reset session start time
@@ -378,18 +430,21 @@ function Timer() {
     // Play completion sound when canceling
     playCompletionSound();
     
-    // Log session cancellation if authenticated
-    if (isAuthenticated) {
-      // Calculate the total duration based on current mode and settings
-      const totalDuration = minutesToSeconds(
-        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-      );
+    // Log session cancellation if authenticated and it's a work session
+    if (isAuthenticated && modeRef.current === TIMER_MODES.WORK) {
+      // Calculate the actual duration spent in this session
+      const actualDuration = minutesToSeconds(settingsInfo.workMinutes) - secondsLeftRef.current;
       
-      console.log('Session canceled:', {
-        mode: modeRef.current,
-        duration: totalDuration - secondsLeftRef.current,
+      console.log('Work session canceled:', {
+        duration: actualDuration,
         completedAt: new Date().toISOString()
       });
+
+      // Log the canceled work session to the database
+      logTimerEvent(TIMER_EVENTS.COMPLETED, TIMER_MODES.WORK, actualDuration, null)
+        .catch(error => {
+          console.error('Error logging canceled work session:', error);
+        });
     }
     
     // Reset session start time
@@ -854,6 +909,13 @@ function Timer() {
         <div className="auth-message">
           Sign in to access settings, stats, and custom timers
         </div>
+      )}
+      
+      {showFeedback && (
+        <FeedbackModal
+          onSubmit={handleFeedbackSubmit}
+          onSkip={handleFeedbackSkip}
+        />
       )}
       
       <style jsx>{`
