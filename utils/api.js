@@ -126,6 +126,7 @@ export const saveSettings = async (settings) => {
  */
 export const fetchTimerStats = async () => {
   try {
+    console.log('Fetching timer stats...');
     const response = await fetch('/api/timer/stats', {
       credentials: 'include'
     });
@@ -136,7 +137,10 @@ export const fetchTimerStats = async () => {
       return null;
     }
     
-    return await response.json();
+    const data = await response.json();
+    console.log('Timer stats response:', data);
+    console.log('Daily stats:', data.dailyStats);
+    return data;
   } catch (error) {
     console.error('Error fetching timer stats:', error);
     return null;

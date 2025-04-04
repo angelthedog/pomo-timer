@@ -28,6 +28,13 @@ const SessionSchema = new mongoose.Schema(
         return new Date().toLocaleString();
       }
     },
+    endDateLocal: {
+      type: String,
+      default: function() {
+        const now = new Date();
+        return `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
+      }
+    },
     timezone: {
       type: String,
       default: function() {

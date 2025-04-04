@@ -48,6 +48,7 @@ export default async function handler(req, res) {
     // Get current time in both UTC and local format
     const now = new Date();
     const localTime = now.toLocaleString();
+    const localDate = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     // Create session data object
@@ -56,6 +57,7 @@ export default async function handler(req, res) {
       duration,
       endTimeUTC: now,
       endTimeLocal: localTime,
+      endDateLocal: localDate,
       timezone: timezone,
       feedback: feedback // Store the star rating (1-5) or null if skipped
     };
