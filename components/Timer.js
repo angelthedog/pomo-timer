@@ -13,6 +13,7 @@ import { logTimerEvent } from '../utils/api';
 import { TIMER_MODES, TIMER_EVENTS, COLORS, UI, PINK_NOISE_URLS, TIMER_SETTINGS } from '../utils/constants';
 import { formatTime, calculatePercentage, minutesToSeconds } from '../utils/helpers';
 import { useRouter } from 'next/router';
+import { PlayIcon, PauseIcon, ForwardIcon, XCircleIcon } from '@heroicons/react/24/solid';
 
 function Timer() {
   const router = useRouter();
@@ -769,10 +770,10 @@ function Timer() {
         value={percentage}
         text={timeDisplay}
         styles={buildStyles({
-          textColor: COLORS.WHITE,
-          pathColor: mode === TIMER_MODES.WORK ? COLORS.RED : COLORS.GREEN,
-          tailColor: COLORS.TRANSPARENT_WHITE,
-        })} 
+          textColor: '#fff',
+          pathColor: mode === TIMER_MODES.WORK ? '#f54e4e' : '#4aec8c',
+          trailColor: 'rgba(255,255,255,.2)',
+        })}
       />
       
       {/* Debug info to verify values */}
@@ -788,19 +789,34 @@ function Timer() {
       )}
       
       <div style={{marginTop:'20px', display: 'flex', justifyContent: 'center', gap: '10px'}}>
-        {isPaused
-          ? <PlayButton onClick={() => handlePlayPause(true)} />
-          : <PauseButton onClick={() => handlePlayPause(false)} />}
-        <FastForwardButton 
-          onClick={handleFastForward} 
+        <button
+          className="with-text play-button"
+          onClick={handlePlayPause}
+          style={{ zIndex: 5, position: 'relative' }}
+        >
+          {isPaused ? <PlayIcon className="w-6 h-6" /> : <PauseIcon className="w-6 h-6" />}
+          {isPaused ? 'Play' : 'Pause'}
+        </button>
+        <button
+          className="with-text fast-forward-button"
+          onClick={handleFastForward}
           disabled={!sessionStartTimeRef.current}
-          tooltip={!sessionStartTimeRef.current ? "No active session" : ""}
-        />
-        <CancelButton 
+          title={!sessionStartTimeRef.current ? 'No active session' : undefined}
+          style={{ zIndex: 5, position: 'relative' }}
+        >
+          <ForwardIcon className="w-6 h-6" />
+          Skip
+        </button>
+        <button
+          className="with-text cancel-button"
           onClick={handleCancel}
           disabled={!sessionStartTimeRef.current}
-          tooltip={!sessionStartTimeRef.current ? "No active session" : ""}
-        />
+          title={!sessionStartTimeRef.current ? 'No active session' : undefined}
+          style={{ zIndex: 5, position: 'relative' }}
+        >
+          <XCircleIcon className="w-6 h-6" />
+          Cancel
+        </button>
       </div>
       
       {isAuthenticated && (
@@ -819,18 +835,16 @@ function Timer() {
       )}
       
       <div className="mode-indicator">
-        Current Mode: <span className={mode === TIMER_MODES.WORK ? 'work-mode' : 'break-mode'}>
+        Current Mode:
+        <span className={mode === TIMER_MODES.WORK ? 'work-mode' : 'break-mode'}>
           {mode === TIMER_MODES.WORK ? 'Work' : 'Break'}
         </span>
         <div className="timer-info">
-          {mode === TIMER_MODES.WORK ? 
-            `${secondsLeft} / ${totalSeconds} seconds (${isAuthenticated ? settingsInfo.workMinutes : TIMER_SETTINGS.DEFAULT_WORK_MINUTES} minutes)` : 
-            `${secondsLeft} / ${totalSeconds} seconds (${isAuthenticated ? settingsInfo.breakMinutes : TIMER_SETTINGS.DEFAULT_BREAK_MINUTES} minutes)`
-          }
+          {secondsLeft} / {totalSeconds} seconds ({Math.floor(totalSeconds / 60)} minutes)
         </div>
         {!isAuthenticated && (
           <div className="fixed-times">
-            Fixed times: Work 45m / Break 10m
+            Fixed times: Work {TIMER_SETTINGS.DEFAULT_WORK_MINUTES}m / Break {TIMER_SETTINGS.DEFAULT_BREAK_MINUTES}m
           </div>
         )}
       </div>
