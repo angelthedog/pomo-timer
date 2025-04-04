@@ -18,9 +18,21 @@ const SessionSchema = new mongoose.Schema(
       max: 5,
       default: null,
     },
-    endTime: {
+    endTimeUTC: {
       type: Date,
       default: Date.now,
+    },
+    endTimeLocal: {
+      type: String,
+      default: function() {
+        return new Date().toLocaleString();
+      }
+    },
+    timezone: {
+      type: String,
+      default: function() {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone;
+      }
     }
   },
   { timestamps: true }

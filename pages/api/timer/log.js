@@ -45,11 +45,18 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Get current time in both UTC and local format
+    const now = new Date();
+    const localTime = now.toLocaleString();
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
     // Create session data object
     const sessionData = {
       userId: user._id,
       duration,
-      endTime: new Date(),
+      endTimeUTC: now,
+      endTimeLocal: localTime,
+      timezone: timezone,
       feedback: feedback // Store the star rating (1-5) or null if skipped
     };
     
