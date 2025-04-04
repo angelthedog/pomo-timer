@@ -13,13 +13,14 @@ import { logTimerEvent } from '../utils/api';
 import { TIMER_MODES, TIMER_EVENTS, COLORS, UI, PINK_NOISE_URLS, TIMER_SETTINGS } from '../utils/constants';
 import { formatTime, calculatePercentage, minutesToSeconds } from '../utils/helpers';
 import { useRouter } from 'next/router';
-import FeedbackModal from './FeedbackModal';
+import { PlayIcon, PauseIcon, ForwardIcon, XCircleIcon } from '@heroicons/react/24/solid';
 
 function Timer() {
   const router = useRouter();
   const { data: session, status: authStatus } = useSession();
   const isAuthenticated = !!session;
   const settingsInfo = useSettings();
+  const user = session?.user;
 
   const [isPaused, setIsPaused] = useState(true);
   const [mode, setMode] = useState(TIMER_MODES.WORK);
@@ -27,8 +28,6 @@ function Timer() {
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [renderKey, setRenderKey] = useState(Date.now());
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [currentSessionId, setCurrentSessionId] = useState(null);
   
   // Create a ref for the audio element
   const audioRef = useRef(null);
@@ -45,6 +44,37 @@ function Timer() {
   // Add these refs for pink noise
   const pinkNoiseRef = useRef(null);
   const isPinkNoisePlayingRef = useRef(false);
+
+  // Add a ref to track last hidden time
+  const lastHiddenTimeRef = useRef(null);
+
+  // Add a ref to store state when switching focus
+  const storedStateRef = useRef(null);
+
+  // Add an effect to update pink noise source when settings change
+  useEffect(() => {
+    if (isAuthenticated && settingsInfo.pinkNoiseEnabled && pinkNoiseRef.current) {
+      const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
+      console.log('Updating pink noise source to:', audioUrl);
+      
+      // Only update if the source has changed
+      if (pinkNoiseRef.current.src !== audioUrl) {
+        pinkNoiseRef.current.src = audioUrl;
+        
+        // If pink noise is currently playing, restart it with the new source
+        if (isPinkNoisePlayingRef.current) {
+          console.log('Restarting pink noise with new source');
+          pinkNoiseRef.current.play()
+            .then(() => {
+              console.log('Pink noise restarted successfully with new source');
+            })
+            .catch(err => {
+              console.error('Error restarting pink noise with new source:', err);
+            });
+        }
+      }
+    }
+  }, [isAuthenticated, settingsInfo.pinkNoiseEnabled, settingsInfo.pinkNoiseType]);
 
   // Add a function to test the sound
   const testSound = useCallback(() => {
@@ -96,42 +126,10 @@ function Timer() {
     setSecondsLeft(secondsLeftRef.current);
   }, []);
 
-  const handleTimerEvent = useCallback(async (event, mode, duration = null) => {
-    if (!isAuthenticated) return;
-    
-    try {
-      const timestamp = Date.now();
-      
-      const response = await fetch('/api/timer/log', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          event,
-          timestamp,
-          mode,
-          duration
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to log timer event');
-      }
-      
-      const data = await response.json();
-      
-      // Store the session ID when a session is started
-      if (event === TIMER_EVENTS.STARTED) {
-        console.log('Session started with ID:', data.sessionId);
-        setCurrentSessionId(data.sessionId);
-      }
-      
-      console.log(`Timer event logged: ${event}`);
-    } catch (error) {
-      console.error('Error logging timer event:', error);
-    }
-  }, [isAuthenticated]);
+  const handleTimerEvent = useCallback(async (event, mode, duration) => {
+    // Skip logging since it's not needed
+    console.log('Timer event:', { event, mode, duration });
+  }, []);
 
   const startNewSession = useCallback(() => {
     // Record session start time
@@ -143,11 +141,11 @@ function Timer() {
     setIsTimerActive(true);
     isTimerActiveRef.current = true;
     
-    // Log start event if authenticated
+    // Log start event (just console log)
     if (isAuthenticated) {
       handleTimerEvent(TIMER_EVENTS.STARTED, modeRef.current);
     }
-  }, [handleTimerEvent, modeRef, isAuthenticated]);
+  }, [isAuthenticated, handleTimerEvent]);
 
   // Handle pink noise playback
   const handlePinkNoisePlayback = useCallback((shouldPlay) => {
@@ -165,15 +163,26 @@ function Timer() {
     });
 
     if (shouldPlay && settingsInfo.pinkNoiseEnabled) {
-      // Start playing pink noise with current settings
-      if (pinkNoiseRef.current) {
-        // Update audio source to match current settings
+      // Create the audio element if it doesn't exist
+      if (!pinkNoiseRef.current) {
+        console.log('Creating pink noise audio element');
+        pinkNoiseRef.current = new Audio(PINK_NOISE_URLS[settingsInfo.pinkNoiseType]);
+        pinkNoiseRef.current.loop = true;
+      } else {
+        // Always update audio source to match current settings
         const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
         console.log('Playing pink noise with URL:', audioUrl);
         
-        if (pinkNoiseRef.current.src !== audioUrl) {
-          pinkNoiseRef.current.src = audioUrl;
-        }
+        // Always update the source to ensure it's using the latest settings
+        pinkNoiseRef.current.src = audioUrl;
+        
+        // Ensure loop is set to true
+        pinkNoiseRef.current.loop = true;
+      }
+      
+      // Start playing pink noise with current settings
+      if (pinkNoiseRef.current) {
+        pinkNoiseRef.current.volume = 0.8;
         
         pinkNoiseRef.current.play()
           .then(() => {
@@ -233,81 +242,155 @@ function Timer() {
     setRenderKey(Date.now());
   }, [settingsInfo, startNewSession, isAuthenticated]);
 
-  const completeCurrentSession = useCallback(() => {
-    // Play completion sound immediately
+  // Play completion sound
+  const playCompletionSound = useCallback(() => {
     try {
-      // Create a new Audio object each time for more reliable playback
-      const sound = new Audio('/sounds/complete.mp3');
-      sound.volume = 1.0;
-      
-      // Try to play the sound immediately
-      sound.play()
-        .then(() => console.log('Completion sound played successfully'))
-        .catch(err => {
-          console.error('Error playing completion sound:', err);
-        });
+      // Try to use the existing audio element first
+      if (audioRef.current) {
+        console.log('Using existing audio element for completion sound');
+        audioRef.current.currentTime = 0; // Reset to beginning
+        audioRef.current.volume = 1.0;
+        audioRef.current.play()
+          .then(() => console.log('Completion sound played successfully using existing element'))
+          .catch(err => {
+            console.error('Error playing completion sound with existing element:', err);
+            // Fall back to creating a new Audio object
+            const sound = new Audio('/sounds/complete.mp3');
+            sound.volume = 1.0;
+            sound.play()
+              .then(() => console.log('Completion sound played successfully with new Audio object'))
+              .catch(fallbackErr => {
+                console.error('Error playing completion sound with new Audio object:', fallbackErr);
+              });
+          });
+      } else {
+        // Create a new Audio object if the ref is not available
+        console.log('Creating new Audio object for completion sound');
+        const sound = new Audio('/sounds/complete.mp3');
+        sound.volume = 1.0;
+        sound.play()
+          .then(() => console.log('Completion sound played successfully with new Audio object'))
+          .catch(err => {
+            console.error('Error playing completion sound with new Audio object:', err);
+          });
+      }
     } catch (err) {
-      console.error('Error creating audio:', err);
+      console.error('Error in playCompletionSound:', err);
     }
+  }, []);
 
-    // Log the event only for authenticated users
+  const completeCurrentSession = useCallback(() => {
+    // Play completion sound for all session completions
+    playCompletionSound();
+    
+    // Log session completion if authenticated
     if (isAuthenticated) {
-      logTimerEvent('completed', {
+      // Calculate the total duration based on current mode and settings
+      const totalDuration = minutesToSeconds(
+        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
+      );
+      
+      console.log('Session completed:', {
         mode: modeRef.current,
-        duration: modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes * 60 : settingsInfo.breakMinutes * 60,
-        elapsed: Math.floor((Date.now() - sessionStartTimeRef.current) / 1000)
+        duration: totalDuration,
+        completedAt: new Date().toISOString()
       });
     }
-
-    // Show feedback modal for work sessions
-    if (modeRef.current === TIMER_MODES.WORK && isAuthenticated) {
-      setShowFeedbackModal(true);
-      setCurrentSessionId(Date.now().toString());
+    
+    // Store current pink noise state before switching modes
+    const wasPinkNoisePlaying = isPinkNoisePlayingRef.current;
+    
+    // Stop pink noise before switching modes
+    if (isAuthenticated && settingsInfo.pinkNoiseEnabled) {
+      console.log('Stopping pink noise before switching modes');
+      handlePinkNoisePlayback(false);
     }
-
-    // Switch to next mode and start it
+    
+    // Switch to the next mode
     switchMode();
-  }, [logTimerEvent, settingsInfo.workMinutes, settingsInfo.breakMinutes, isAuthenticated, switchMode]);
+    
+    // Restart pink noise for the new session if it was playing before
+    if (isAuthenticated && settingsInfo.pinkNoiseEnabled && wasPinkNoisePlaying) {
+      console.log('Restarting pink noise for new session');
+      // Add a small delay to ensure the audio element is ready
+      setTimeout(() => {
+        handlePinkNoisePlayback(true);
+      }, 300);
+    }
+  }, [isAuthenticated, switchMode, playCompletionSound, settingsInfo, modeRef, handlePinkNoisePlayback]);
 
   const skipCurrentSession = useCallback(() => {
     if (!sessionStartTimeRef.current) return;
     
-    // First do everything that cancelCurrentSession does
-    // Reset session start time
-    setSessionStartTime(null);
-    sessionStartTimeRef.current = null;
+    // Play completion sound when skipping
+    playCompletionSound();
     
-    // Switch to next mode
-    const nextMode = modeRef.current === TIMER_MODES.WORK ? TIMER_MODES.BREAK : TIMER_MODES.WORK;
-    setMode(nextMode);
-    modeRef.current = nextMode;
-    
-    // Reset timer to next mode's initial duration
-    const initialSeconds = minutesToSeconds(
-      nextMode === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-    );
-    
-    // Set the new duration
-    setSecondsLeft(initialSeconds);
-    secondsLeftRef.current = initialSeconds;
-    
-    // Pause timer
-    setIsPaused(true);
-    isPausedRef.current = true;
-    
-    // Mark timer as inactive
-    setIsTimerActive(false);
-    isTimerActiveRef.current = false;
-    
-    // Stop pink noise
-    handlePinkNoisePlayback(false);
-    
-    console.log('Session skipped, switched to next mode:', nextMode);
-  }, [settingsInfo, modeRef, handlePinkNoisePlayback]);
+    // Add a small delay to ensure the sound plays completely before changing state
+    setTimeout(() => {
+      // Log session skip if authenticated
+      if (isAuthenticated) {
+        // Calculate the total duration based on current mode and settings
+        const totalDuration = minutesToSeconds(
+          modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
+        );
+        
+        console.log('Session skipped:', {
+          mode: modeRef.current,
+          duration: totalDuration - secondsLeftRef.current,
+          completedAt: new Date().toISOString()
+        });
+      }
+      
+      // Reset session start time
+      setSessionStartTime(null);
+      sessionStartTimeRef.current = null;
+      
+      // Switch to next mode
+      const nextMode = modeRef.current === TIMER_MODES.WORK ? TIMER_MODES.BREAK : TIMER_MODES.WORK;
+      setMode(nextMode);
+      modeRef.current = nextMode;
+      
+      // Reset timer to next mode's initial duration
+      const initialSeconds = minutesToSeconds(
+        nextMode === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
+      );
+      
+      // Set the new duration
+      setSecondsLeft(initialSeconds);
+      secondsLeftRef.current = initialSeconds;
+      
+      // Pause timer
+      setIsPaused(true);
+      isPausedRef.current = true;
+      
+      // Mark timer as inactive
+      setIsTimerActive(false);
+      isTimerActiveRef.current = false;
+      
+      // Stop pink noise
+      handlePinkNoisePlayback(false);
+      
+      console.log('Session skipped, switched to next mode:', nextMode);
+    }, 300); // 300ms delay to ensure sound plays completely
+  }, [settingsInfo, modeRef, handlePinkNoisePlayback, isAuthenticated, playCompletionSound]);
 
   const cancelCurrentSession = useCallback(() => {
-    // Don't log the session, just reset the timer
-    console.log('Session canceled');
+    // Play completion sound when canceling
+    playCompletionSound();
+    
+    // Log session cancellation if authenticated
+    if (isAuthenticated) {
+      // Calculate the total duration based on current mode and settings
+      const totalDuration = minutesToSeconds(
+        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
+      );
+      
+      console.log('Session canceled:', {
+        mode: modeRef.current,
+        duration: totalDuration - secondsLeftRef.current,
+        completedAt: new Date().toISOString()
+      });
+    }
     
     // Reset session start time
     setSessionStartTime(null);
@@ -331,56 +414,7 @@ function Timer() {
 
     // Stop pink noise
     handlePinkNoisePlayback(false);
-  }, [settingsInfo]);
-
-  const resetTimer = useCallback(() => {
-    // Complete current session if one is in progress
-    if (sessionStartTimeRef.current && !isPausedRef.current) {
-      // Calculate elapsed time
-      const elapsedSeconds = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
-      
-      // Log completion with actual duration if authenticated
-      if (isAuthenticated) {
-        handleTimerEvent(TIMER_EVENTS.COMPLETED, modeRef.current, elapsedSeconds);
-      }
-      
-      // Reset session start time
-      setSessionStartTime(null);
-      sessionStartTimeRef.current = null;
-      
-      console.log(`Session completed during reset: ${modeRef.current}, Duration: ${elapsedSeconds} seconds`);
-    }
-    
-    // Reset timer to current mode with new duration
-    const newSeconds = minutesToSeconds(
-      modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-    );
-    
-    setSecondsLeft(newSeconds);
-    secondsLeftRef.current = newSeconds;
-    
-    // Pause timer
-    setIsPaused(true);
-    isPausedRef.current = true;
-    
-    // Reset session start time
-    setSessionStartTime(null);
-    sessionStartTimeRef.current = null;
-    
-    // Mark timer as inactive
-    setIsTimerActive(false);
-    isTimerActiveRef.current = false;
-    
-    // Force a re-render by updating the render key
-    setRenderKey(Date.now());
-    
-    console.log('Timer reset with new settings:', {
-      mode: modeRef.current,
-      seconds: newSeconds,
-      workMinutes: settingsInfo.workMinutes,
-      breakMinutes: settingsInfo.breakMinutes
-    });
-  }, [settingsInfo, isAuthenticated, handleTimerEvent]);
+  }, [settingsInfo, handlePinkNoisePlayback, isAuthenticated, playCompletionSound]);
 
   // Fast forward to next session
   const handleFastForward = useCallback(() => {
@@ -479,91 +513,135 @@ function Timer() {
 
   // Effect to update timer when settings load
   useEffect(() => {
-    // This effect runs whenever settingsInfo.workMinutes or settingsInfo.breakMinutes changes
-    // or when isAuthenticated or settingsInfo.isLoading changes
-    
-    // Only proceed if settings are loaded (not loading)
     if (!settingsInfo.isLoading) {
-      // Don't reset if there's an active session
-      if (sessionStartTimeRef.current) {
-        console.log('Active session in progress, not updating timer with database values');
+      // Don't reset if there's an active session or if we're in the middle of a focus switch
+      if (sessionStartTimeRef.current && isTimerActiveRef.current) {
+        console.log('Active session in progress, not resetting timer with new settings');
         return;
       }
       
-      // Get the correct minutes based on authentication status
-      const workMinutes = isAuthenticated ? settingsInfo.workMinutes : GUEST_WORK_MINUTES;
-      const breakMinutes = isAuthenticated ? settingsInfo.breakMinutes : GUEST_BREAK_MINUTES;
+      // Don't reset if we're in the middle of a focus switch
+      if (lastHiddenTimeRef.current) {
+        console.log('Focus switch in progress, not resetting timer with new settings');
+        return;
+      }
       
-      console.log('Settings loaded, updating timer with values:', {
-        workMinutes,
-        breakMinutes,
-        isAuthenticated
-      });
-      
-      // Always update the timer with the current mode's duration
-      const databaseSeconds = minutesToSeconds(
-        modeRef.current === TIMER_MODES.WORK ? workMinutes : breakMinutes
-      );
-      
-      // IMPORTANT: Update both the state and the ref to ensure consistency
-      setSecondsLeft(databaseSeconds);
-      secondsLeftRef.current = databaseSeconds;
-      
-      // Update the refs to track the new settings
-      prevWorkMinutesRef.current = workMinutes;
-      prevBreakMinutesRef.current = breakMinutes;
-      
-      // Force a re-render to update the UI
-      setRenderKey(Date.now());
-      
-      console.log('Timer updated with values:', {
-        mode: modeRef.current,
-        seconds: databaseSeconds,
-        workMinutes,
-        breakMinutes
-      });
-    }
-  }, [settingsInfo.isLoading, isAuthenticated, settingsInfo.workMinutes, settingsInfo.breakMinutes]);
-
-  // Effect to handle settings updates
-  useEffect(() => {
-    if (!settingsInfo.isLoading && isAuthenticated) {
-      // Calculate new seconds based on current mode and latest settings
+      // If no active session, just reset the timer with new settings
       const newSeconds = minutesToSeconds(
         modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
       );
       
-      // Only update timer if it's not currently running
-      if (!isTimerActiveRef.current) {
-        // Update timer state
-        setSecondsLeft(newSeconds);
-        secondsLeftRef.current = newSeconds;
+      setSecondsLeft(newSeconds);
+      secondsLeftRef.current = newSeconds;
+      
+      // Pause timer
+      setIsPaused(true);
+      isPausedRef.current = true;
+      
+      // Reset session start time
+      setSessionStartTime(null);
+      sessionStartTimeRef.current = null;
+      
+      // Mark timer as inactive
+      setIsTimerActive(false);
+      isTimerActiveRef.current = false;
+      
+      // Force a re-render by updating the render key
+      setRenderKey(Date.now());
+      
+      console.log('Timer reset with new settings:', {
+        mode: modeRef.current,
+        seconds: newSeconds,
+        workMinutes: settingsInfo.workMinutes,
+        breakMinutes: settingsInfo.breakMinutes
+      });
+    }
+  }, [settingsInfo.isLoading, settingsInfo.workMinutes, settingsInfo.breakMinutes]);
+
+  // Handle page visibility changes
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      console.log('Visibility changed:', document.visibilityState);
+      
+      if (document.visibilityState === 'hidden') {
+        // Store the time when page was hidden
+        lastHiddenTimeRef.current = Date.now();
         
-        // Force UI update
-        setRenderKey(Date.now());
-        
-        console.log('Timer updated with new settings:', {
+        // Store the current state when switching away
+        storedStateRef.current = {
+          secondsLeft: secondsLeftRef.current,
+          isPaused: isPausedRef.current,
+          isTimerActive: isTimerActiveRef.current,
           mode: modeRef.current,
-          newSeconds,
-          workMinutes: settingsInfo.workMinutes,
-          breakMinutes: settingsInfo.breakMinutes
+          sessionStartTime: sessionStartTimeRef.current,
+          isPinkNoisePlaying: isPinkNoisePlayingRef.current
+        };
+        
+        // Do NOT stop pink noise when page is hidden
+        // This allows it to continue playing during focus switch
+        console.log('Page hidden, keeping pink noise playing if active');
+        
+        console.log('Page hidden, storing state:', storedStateRef.current);
+      } else {
+        // Page is now visible again
+        console.log('Page visible again, checking conditions:', {
+          lastHiddenTime: lastHiddenTimeRef.current,
+          isPaused: isPausedRef.current,
+          isTimerActive: isTimerActiveRef.current,
+          storedState: storedStateRef.current
+        });
+        
+        // We don't need to adjust the timer state when the page becomes visible again
+        // The timer state is already correctly maintained in memory
+        
+        // Simplified condition: only check if user is authenticated and pink noise is enabled
+        if (isAuthenticated && settingsInfo.pinkNoiseEnabled) {
+          console.log('Restarting pink noise after focus switch');
+          
+          // Always restart pink noise when the page becomes visible again
+          // Add a small delay to ensure the audio element is ready
+          setTimeout(() => {
+            // Ensure loop is set to true
+            if (pinkNoiseRef.current) {
+              pinkNoiseRef.current.loop = true;
+              
+              // Always update the source to ensure it's using the latest settings
+              const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
+              pinkNoiseRef.current.src = audioUrl;
+            }
+            handlePinkNoisePlayback(true);
+            
+            // Reset the hidden time and clear stored state after restarting pink noise
+            lastHiddenTimeRef.current = null;
+            storedStateRef.current = null;
+          }, 500);
+        } else {
+          console.log('Not restarting pink noise:', {
+            isAuthenticated,
+            pinkNoiseEnabled: settingsInfo.pinkNoiseEnabled
+          });
+          
+          // Reset the hidden time and clear stored state since we're not restarting pink noise
+          lastHiddenTimeRef.current = null;
+          storedStateRef.current = null;
+        }
+        
+        // Log the current state
+        console.log('Page visible again, current state:', {
+          secondsLeft: secondsLeftRef.current,
+          isPaused: isPausedRef.current,
+          isTimerActive: isTimerActiveRef.current,
+          mode: modeRef.current,
+          sessionStartTime: sessionStartTimeRef.current
         });
       }
+    };
 
-      // Update pink noise if timer is running
-      if (isTimerActiveRef.current && !isPausedRef.current) {
-        handlePinkNoisePlayback(settingsInfo.pinkNoiseEnabled);
-      }
-    }
-  }, [
-    settingsInfo.isLoading,
-    isAuthenticated,
-    settingsInfo.workMinutes,
-    settingsInfo.breakMinutes,
-    settingsInfo.pinkNoiseEnabled,
-    settingsInfo.pinkNoiseType,
-    handlePinkNoisePlayback
-  ]);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isAuthenticated, settingsInfo.pinkNoiseEnabled, handlePinkNoisePlayback]);
 
   // Timer tick effect
   useEffect(() => {
@@ -571,15 +649,10 @@ function Timer() {
       if (isPausedRef.current) {
         return;
       }
+
       if (secondsLeftRef.current === 0) {
-        // Complete current session when timer reaches zero
         completeCurrentSession();
         return;
-      }
-
-      // Debug log every 10 seconds to track timer progress
-      if (secondsLeftRef.current % 10 === 0) {
-        console.log(`Timer tick: ${secondsLeftRef.current} seconds left, mode: ${modeRef.current}`);
       }
 
       tick();
@@ -587,25 +660,6 @@ function Timer() {
 
     return () => clearInterval(interval);
   }, [tick, completeCurrentSession]);
-
-  // Handle page visibility changes
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        // No need to save state - timer continues running in background
-        console.log('Page became hidden, timer continues in background');
-      } else {
-        // No need to restore state - timer state is maintained in memory
-        console.log('Page became visible, timer state maintained in memory');
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
 
   // Calculate totalSeconds and percentage right before rendering to ensure they're up-to-date
   const calculateTimerValues = () => {
@@ -632,7 +686,8 @@ function Timer() {
   // Add function to check if settings/stats should be enabled
   const isSettingsAndStatsEnabled = () => {
     // Only enable if timer is in init state, cancelled, or skipped
-    return !isTimerActiveRef.current && !sessionStartTimeRef.current;
+    // Also disable if timer is naturally completed (secondsLeft is 0)
+    return !isTimerActiveRef.current && !sessionStartTimeRef.current && secondsLeftRef.current > 0;
   };
 
   // Handle play/pause
@@ -643,9 +698,6 @@ function Timer() {
         // If no session is in progress, start a new one
         if (!sessionStartTimeRef.current) {
           startNewSession();
-        } else if (isAuthenticated) {
-          // Otherwise, resume existing session if authenticated
-          handleTimerEvent(TIMER_EVENTS.RESUMED, modeRef.current);
         }
       }
       
@@ -668,13 +720,8 @@ function Timer() {
       if (isAuthenticated) {
         handlePinkNoisePlayback(false);
       }
-      
-      // Log pause event if authenticated
-      if (isAuthenticated) {
-        handleTimerEvent(TIMER_EVENTS.PAUSED, modeRef.current);
-      }
     }
-  }, [handleTimerEvent, startNewSession, modeRef, isAuthenticated, handlePinkNoisePlayback]);
+  }, [startNewSession, isAuthenticated, handlePinkNoisePlayback]);
 
   const handleSettingsClick = () => {
     // Show settings modal
@@ -684,44 +731,6 @@ function Timer() {
   const handleStatsClick = () => {
     if (isAuthenticated) {
       router.push('/stats');
-    }
-  };
-
-  // Add this function to handle feedback submission
-  const handleFeedbackSubmit = async (sessionId, rating) => {
-    if (!isAuthenticated) return;
-    
-    try {
-      console.log(`Submitting feedback: ${rating} stars for session ${sessionId}`);
-      
-      const response = await fetch('/api/timer/feedback', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId,
-          feedback: rating
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error response:', errorData);
-        throw new Error('Failed to submit feedback');
-      }
-      
-      const data = await response.json();
-      console.log('Feedback submitted successfully:', data);
-      
-      // Add a delay before closing the modal and switching modes
-      setTimeout(() => {
-        setShowFeedbackModal(false);
-        // Switch modes after feedback is submitted
-        switchMode();
-      }, UI.AUTO_CLOSE_DELAY);
-    } catch (error) {
-      console.error('Error submitting feedback:', error);
     }
   };
 
@@ -762,10 +771,10 @@ function Timer() {
         value={percentage}
         text={timeDisplay}
         styles={buildStyles({
-          textColor: COLORS.WHITE,
-          pathColor: mode === TIMER_MODES.WORK ? COLORS.RED : COLORS.GREEN,
-          tailColor: COLORS.TRANSPARENT_WHITE,
-        })} 
+          textColor: '#fff',
+          pathColor: mode === TIMER_MODES.WORK ? '#f54e4e' : '#4aec8c',
+          trailColor: 'rgba(255,255,255,.2)',
+        })}
       />
       
       {/* Debug info to verify values */}
@@ -781,19 +790,34 @@ function Timer() {
       )}
       
       <div style={{marginTop:'20px', display: 'flex', justifyContent: 'center', gap: '10px'}}>
-        {isPaused
-          ? <PlayButton onClick={() => handlePlayPause(true)} />
-          : <PauseButton onClick={() => handlePlayPause(false)} />}
-        <FastForwardButton 
-          onClick={handleFastForward} 
+        <button
+          className="with-text play-button"
+          onClick={handlePlayPause}
+          style={{ zIndex: 5, position: 'relative' }}
+        >
+          {isPaused ? <PlayIcon className="w-6 h-6" /> : <PauseIcon className="w-6 h-6" />}
+          {isPaused ? 'Play' : 'Pause'}
+        </button>
+        <button
+          className="with-text fast-forward-button"
+          onClick={handleFastForward}
           disabled={!sessionStartTimeRef.current}
-          tooltip={!sessionStartTimeRef.current ? "No active session" : ""}
-        />
-        <CancelButton 
+          title={!sessionStartTimeRef.current ? 'No active session' : undefined}
+          style={{ zIndex: 5, position: 'relative' }}
+        >
+          <ForwardIcon className="w-6 h-6" />
+          Skip
+        </button>
+        <button
+          className="with-text cancel-button"
           onClick={handleCancel}
           disabled={!sessionStartTimeRef.current}
-          tooltip={!sessionStartTimeRef.current ? "No active session" : ""}
-        />
+          title={!sessionStartTimeRef.current ? 'No active session' : undefined}
+          style={{ zIndex: 5, position: 'relative' }}
+        >
+          <XCircleIcon className="w-6 h-6" />
+          Cancel
+        </button>
       </div>
       
       {isAuthenticated && (
@@ -812,18 +836,16 @@ function Timer() {
       )}
       
       <div className="mode-indicator">
-        Current Mode: <span className={mode === TIMER_MODES.WORK ? 'work-mode' : 'break-mode'}>
+        Current Mode:
+        <span className={mode === TIMER_MODES.WORK ? 'work-mode' : 'break-mode'}>
           {mode === TIMER_MODES.WORK ? 'Work' : 'Break'}
         </span>
         <div className="timer-info">
-          {mode === TIMER_MODES.WORK ? 
-            `${secondsLeft} / ${totalSeconds} seconds (${isAuthenticated ? settingsInfo.workMinutes : TIMER_SETTINGS.DEFAULT_WORK_MINUTES} minutes)` : 
-            `${secondsLeft} / ${totalSeconds} seconds (${isAuthenticated ? settingsInfo.breakMinutes : TIMER_SETTINGS.DEFAULT_BREAK_MINUTES} minutes)`
-          }
+          {secondsLeft} / {totalSeconds} seconds ({Math.floor(totalSeconds / 60)} minutes)
         </div>
         {!isAuthenticated && (
           <div className="fixed-times">
-            Fixed times: Work 45m / Break 10m
+            Fixed times: Work {TIMER_SETTINGS.DEFAULT_WORK_MINUTES}m / Break {TIMER_SETTINGS.DEFAULT_BREAK_MINUTES}m
           </div>
         )}
       </div>
@@ -833,14 +855,6 @@ function Timer() {
           Sign in to access settings, stats, and custom timers
         </div>
       )}
-      
-      {/* Add the feedback modal */}
-      <FeedbackModal
-        isOpen={showFeedbackModal}
-        onClose={() => setShowFeedbackModal(false)}
-        onSubmit={handleFeedbackSubmit}
-        sessionId={currentSessionId}
-      />
       
       <style jsx>{`
         .auth-message {

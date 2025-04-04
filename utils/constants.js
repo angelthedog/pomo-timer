@@ -38,7 +38,7 @@ export const TIMER_SETTINGS = {
 
 // UI settings
 export const UI = {
-  AUTO_CLOSE_DELAY: 1500, // ms
+  AUTO_CLOSE_DELAY: 5000, // 5 seconds for auto-dismissing modals
   TICK_INTERVAL: 1000 // ms
 };
 
