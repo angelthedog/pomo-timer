@@ -283,18 +283,22 @@ function Timer() {
     // Play completion sound for all session completions
     playCompletionSound();
     
-    // Log session completion if authenticated
-    if (isAuthenticated) {
+    // Only log completed work sessions to the database
+    if (isAuthenticated && modeRef.current === TIMER_MODES.WORK) {
       // Calculate the total duration based on current mode and settings
-      const totalDuration = minutesToSeconds(
-        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-      );
+      const totalDuration = minutesToSeconds(settingsInfo.workMinutes);
       
-      console.log('Session completed:', {
-        mode: modeRef.current,
+      console.log('Work session completed:', {
         duration: totalDuration,
         completedAt: new Date().toISOString()
       });
+
+      // Log the completed work session to the database
+      // For now, we're not collecting feedback, so we pass null
+      logTimerEvent(TIMER_EVENTS.COMPLETED, TIMER_MODES.WORK, totalDuration, null)
+        .catch(error => {
+          console.error('Error logging completed work session:', error);
+        });
     }
     
     // Store current pink noise state before switching modes
@@ -327,18 +331,21 @@ function Timer() {
     
     // Add a small delay to ensure the sound plays completely before changing state
     setTimeout(() => {
-      // Log session skip if authenticated
-      if (isAuthenticated) {
-        // Calculate the total duration based on current mode and settings
-        const totalDuration = minutesToSeconds(
-          modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-        );
+      // Log session skip if authenticated and it's a work session
+      if (isAuthenticated && modeRef.current === TIMER_MODES.WORK) {
+        // Calculate the actual duration spent in this session
+        const actualDuration = minutesToSeconds(settingsInfo.workMinutes) - secondsLeftRef.current;
         
-        console.log('Session skipped:', {
-          mode: modeRef.current,
-          duration: totalDuration - secondsLeftRef.current,
+        console.log('Work session skipped:', {
+          duration: actualDuration,
           completedAt: new Date().toISOString()
         });
+
+        // Log the skipped work session to the database
+        logTimerEvent(TIMER_EVENTS.COMPLETED, TIMER_MODES.WORK, actualDuration, null)
+          .catch(error => {
+            console.error('Error logging skipped work session:', error);
+          });
       }
       
       // Reset session start time
@@ -378,18 +385,21 @@ function Timer() {
     // Play completion sound when canceling
     playCompletionSound();
     
-    // Log session cancellation if authenticated
-    if (isAuthenticated) {
-      // Calculate the total duration based on current mode and settings
-      const totalDuration = minutesToSeconds(
-        modeRef.current === TIMER_MODES.WORK ? settingsInfo.workMinutes : settingsInfo.breakMinutes
-      );
+    // Log session cancellation if authenticated and it's a work session
+    if (isAuthenticated && modeRef.current === TIMER_MODES.WORK) {
+      // Calculate the actual duration spent in this session
+      const actualDuration = minutesToSeconds(settingsInfo.workMinutes) - secondsLeftRef.current;
       
-      console.log('Session canceled:', {
-        mode: modeRef.current,
-        duration: totalDuration - secondsLeftRef.current,
+      console.log('Work session canceled:', {
+        duration: actualDuration,
         completedAt: new Date().toISOString()
       });
+
+      // Log the canceled work session to the database
+      logTimerEvent(TIMER_EVENTS.COMPLETED, TIMER_MODES.WORK, actualDuration, null)
+        .catch(error => {
+          console.error('Error logging canceled work session:', error);
+        });
     }
     
     // Reset session start time

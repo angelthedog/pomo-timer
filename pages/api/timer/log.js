@@ -24,11 +24,11 @@ export default async function handler(req, res) {
 
     await dbConnect();
 
-    const { duration } = req.body;
+    const { duration, feedback } = req.body;
     
     // Validate input
-    if (!duration) {
-      return res.status(400).json({ message: 'Missing duration field' });
+    if (!duration || typeof duration !== 'number') {
+      return res.status(400).json({ message: 'Missing or invalid duration field' });
     }
 
     // Get user from database
@@ -40,7 +40,9 @@ export default async function handler(req, res) {
     // Create a new work session record
     const newSession = await Session.create({
       userId: user._id,
-      duration
+      duration,
+      endTime: new Date(),
+      feedback: feedback || null
     });
 
     console.log(`Work session logged for user ${user.username}: ${duration} seconds`);

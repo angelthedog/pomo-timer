@@ -3,15 +3,22 @@
  */
 
 /**
- * Log a timer event to the API
- * @param {string} event - The event type (started, paused, resumed, completed)
- * @param {string} mode - The current timer mode (work, break)
- * @param {number} duration - The duration in seconds (optional)
+ * Log a completed work session to the API
+ * @param {string} event - The event type (should be 'completed')
+ * @param {string} mode - The timer mode (should be 'work')
+ * @param {number} duration - The duration in seconds
+ * @param {number} feedback - Optional feedback score (1-5)
  * @returns {Promise<Object>} - The API response
  */
-export const logTimerEvent = async (event, mode, duration = null) => {
+export const logTimerEvent = async (event, mode, duration = null, feedback = null) => {
+  // Only log completed work sessions
+  if (event !== 'completed' || mode !== 'work' || !duration) {
+    console.log('Skipping logging - only completed work sessions are logged');
+    return;
+  }
+
   try {
-    console.log(`Logging timer event: ${event}, mode: ${mode}, duration: ${duration || 'N/A'}`);
+    console.log(`Logging completed work session: ${duration} seconds${feedback ? `, feedback: ${feedback}` : ''}`);
     
     const response = await fetch('/api/timer/log', {
       method: 'POST',
@@ -19,7 +26,8 @@ export const logTimerEvent = async (event, mode, duration = null) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        duration
+        duration,
+        feedback
       }),
       credentials: 'include'
     });
@@ -28,12 +36,12 @@ export const logTimerEvent = async (event, mode, duration = null) => {
     
     if (!response.ok) {
       console.error('Error response from timer log API:', data);
-      throw new Error(data.message || 'Failed to log timer event');
+      throw new Error(data.message || 'Failed to log work session');
     }
     
     return data;
   } catch (error) {
-    console.error('Error logging timer event:', error);
+    console.error('Error logging work session:', error);
     throw error;
   }
 };
