@@ -844,10 +844,14 @@ function Timer() {
       <CircularProgressbar
         value={percentage}
         text={timeDisplay}
+        strokeWidth={50}
         styles={buildStyles({
-          textColor: '#fff',
+          textColor: '#1a1a1a',
           pathColor: mode === TIMER_MODES.WORK ? '#f54e4e' : '#4aec8c',
-          trailColor: 'rgba(255,255,255,.2)',
+          trailColor: 'rgba(255, 255, 255, 0.2)',
+          strokeLinecap: 'butt',
+          textSize: '32px',
+          pathTransitionDuration: 0.1
         })}
       />
       
