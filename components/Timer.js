@@ -649,37 +649,47 @@ function Timer() {
         // We don't need to adjust the timer state when the page becomes visible again
         // The timer state is already correctly maintained in memory
         
-        // Simplified condition: only check if user is authenticated and pink noise is enabled
-        if (isAuthenticated && settingsInfo.pinkNoiseEnabled) {
-          console.log('Restarting pink noise after focus switch');
+        // Only restart pink noise if it was playing before and the timer is still active and not paused
+        if (isAuthenticated && settingsInfo.pinkNoiseEnabled && storedStateRef.current) {
+          const shouldRestartPinkNoise = storedStateRef.current.isPinkNoisePlaying && 
+                                       !storedStateRef.current.isPaused && 
+                                       storedStateRef.current.isTimerActive;
           
-          // Always restart pink noise when the page becomes visible again
-          // Add a small delay to ensure the audio element is ready
-          setTimeout(() => {
-            // Ensure loop is set to true
-            if (pinkNoiseRef.current) {
-              pinkNoiseRef.current.loop = true;
-              
-              // Always update the source to ensure it's using the latest settings
-              const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
-              pinkNoiseRef.current.src = audioUrl;
-            }
-            handlePinkNoisePlayback(true);
-            
-            // Reset the hidden time and clear stored state after restarting pink noise
-            lastHiddenTimeRef.current = null;
-            storedStateRef.current = null;
-          }, 500);
+          console.log('Pink noise state check:', {
+            wasPlaying: storedStateRef.current.isPinkNoisePlaying,
+            wasPaused: storedStateRef.current.isPaused,
+            wasActive: storedStateRef.current.isTimerActive,
+            shouldRestart: shouldRestartPinkNoise
+          });
+          
+          if (shouldRestartPinkNoise) {
+            console.log('Restarting pink noise after focus switch');
+            // Add a small delay to ensure the audio element is ready
+            setTimeout(() => {
+              // Ensure loop is set to true
+              if (pinkNoiseRef.current) {
+                pinkNoiseRef.current.loop = true;
+                
+                // Always update the source to ensure it's using the latest settings
+                const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
+                pinkNoiseRef.current.src = audioUrl;
+              }
+              handlePinkNoisePlayback(true);
+            }, 500);
+          } else {
+            console.log('Not restarting pink noise - timer was paused or inactive');
+          }
         } else {
           console.log('Not restarting pink noise:', {
             isAuthenticated,
-            pinkNoiseEnabled: settingsInfo.pinkNoiseEnabled
+            pinkNoiseEnabled: settingsInfo.pinkNoiseEnabled,
+            hasStoredState: !!storedStateRef.current
           });
-          
-          // Reset the hidden time and clear stored state since we're not restarting pink noise
-          lastHiddenTimeRef.current = null;
-          storedStateRef.current = null;
         }
+        
+        // Reset the hidden time and clear stored state
+        lastHiddenTimeRef.current = null;
+        storedStateRef.current = null;
         
         // Log the current state
         console.log('Page visible again, current state:', {
@@ -748,35 +758,44 @@ function Timer() {
   // Handle play/pause
   const handlePlayPause = useCallback((shouldPlay) => {
     if (shouldPlay) {
-      // If starting from paused state
-      if (isPausedRef.current) {
-        // If no session is in progress, start a new one
-        if (!sessionStartTimeRef.current) {
-          startNewSession();
-        }
+      // Starting the timer
+      // If no session is in progress, start a new one
+      if (!sessionStartTime) {
+        console.log('Starting new session');
+        startNewSession();
       }
       
+      // Unpause the timer
+      console.log('Setting isPaused to false');
       setIsPaused(false);
       isPausedRef.current = false;
       
-      // Only start pink noise for authenticated users
-      if (isAuthenticated) {
-        handlePinkNoisePlayback(true);
-      }
-      
-      // Mark timer as active
+      // Mark timer as active to enable Skip and Cancel buttons
+      console.log('Marking timer as active');
       setIsTimerActive(true);
       isTimerActiveRef.current = true;
+      
+      // Start pink noise for authenticated users
+      if (isAuthenticated) {
+        console.log('Starting pink noise for authenticated user');
+        handlePinkNoisePlayback(true);
+      }
     } else {
+      // Pausing the timer
+      console.log('Pausing timer');
       setIsPaused(true);
       isPausedRef.current = true;
       
-      // Only stop pink noise for authenticated users
+      // Keep timer active state so Skip and Cancel remain enabled
+      // According to spec 1.2.1: When timer is running, Skip and Cancel should be active
+      
+      // Stop pink noise for authenticated users
       if (isAuthenticated) {
+        console.log('Stopping pink noise for authenticated user');
         handlePinkNoisePlayback(false);
       }
     }
-  }, [startNewSession, isAuthenticated, handlePinkNoisePlayback]);
+  }, [startNewSession, isAuthenticated, handlePinkNoisePlayback, isPaused, secondsLeft, sessionStartTime, isTimerActive]);
 
   const handleSettingsClick = () => {
     // Show settings modal
@@ -825,10 +844,14 @@ function Timer() {
       <CircularProgressbar
         value={percentage}
         text={timeDisplay}
+        strokeWidth={50}
         styles={buildStyles({
-          textColor: '#fff',
+          textColor: '#1a1a1a',
           pathColor: mode === TIMER_MODES.WORK ? '#f54e4e' : '#4aec8c',
-          trailColor: 'rgba(255,255,255,.2)',
+          trailColor: 'rgba(255, 255, 255, 0.2)',
+          strokeLinecap: 'butt',
+          textSize: '32px',
+          pathTransitionDuration: 0.1
         })}
       />
       
@@ -847,7 +870,12 @@ function Timer() {
       <div style={{marginTop:'20px', display: 'flex', justifyContent: 'center', gap: '10px'}}>
         <button
           className="with-text play-button"
-          onClick={handlePlayPause}
+          onClick={() => {
+            console.log('Play/Pause button clicked, current isPaused:', isPaused);
+            // When isPaused is true, we want to start the timer (shouldPlay = true)
+            // When isPaused is false, we want to pause the timer (shouldPlay = false)
+            handlePlayPause(isPaused);
+          }}
           style={{ zIndex: 5, position: 'relative' }}
         >
           {isPaused ? <PlayIcon className="w-6 h-6" /> : <PauseIcon className="w-6 h-6" />}
@@ -856,8 +884,8 @@ function Timer() {
         <button
           className="with-text fast-forward-button"
           onClick={handleFastForward}
-          disabled={!sessionStartTimeRef.current}
-          title={!sessionStartTimeRef.current ? 'No active session' : undefined}
+          disabled={!isTimerActive}
+          title={!isTimerActive ? 'Timer must be running to skip' : undefined}
           style={{ zIndex: 5, position: 'relative' }}
         >
           <ForwardIcon className="w-6 h-6" />
@@ -866,8 +894,8 @@ function Timer() {
         <button
           className="with-text cancel-button"
           onClick={handleCancel}
-          disabled={!sessionStartTimeRef.current}
-          title={!sessionStartTimeRef.current ? 'No active session' : undefined}
+          disabled={!isTimerActive}
+          title={!isTimerActive ? 'Timer must be running to cancel' : undefined}
           style={{ zIndex: 5, position: 'relative' }}
         >
           <XCircleIcon className="w-6 h-6" />
