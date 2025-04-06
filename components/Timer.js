@@ -649,37 +649,47 @@ function Timer() {
         // We don't need to adjust the timer state when the page becomes visible again
         // The timer state is already correctly maintained in memory
         
-        // Simplified condition: only check if user is authenticated and pink noise is enabled
-        if (isAuthenticated && settingsInfo.pinkNoiseEnabled) {
-          console.log('Restarting pink noise after focus switch');
+        // Only restart pink noise if it was playing before and the timer is still active and not paused
+        if (isAuthenticated && settingsInfo.pinkNoiseEnabled && storedStateRef.current) {
+          const shouldRestartPinkNoise = storedStateRef.current.isPinkNoisePlaying && 
+                                       !storedStateRef.current.isPaused && 
+                                       storedStateRef.current.isTimerActive;
           
-          // Always restart pink noise when the page becomes visible again
-          // Add a small delay to ensure the audio element is ready
-          setTimeout(() => {
-            // Ensure loop is set to true
-            if (pinkNoiseRef.current) {
-              pinkNoiseRef.current.loop = true;
-              
-              // Always update the source to ensure it's using the latest settings
-              const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
-              pinkNoiseRef.current.src = audioUrl;
-            }
-            handlePinkNoisePlayback(true);
-            
-            // Reset the hidden time and clear stored state after restarting pink noise
-            lastHiddenTimeRef.current = null;
-            storedStateRef.current = null;
-          }, 500);
+          console.log('Pink noise state check:', {
+            wasPlaying: storedStateRef.current.isPinkNoisePlaying,
+            wasPaused: storedStateRef.current.isPaused,
+            wasActive: storedStateRef.current.isTimerActive,
+            shouldRestart: shouldRestartPinkNoise
+          });
+          
+          if (shouldRestartPinkNoise) {
+            console.log('Restarting pink noise after focus switch');
+            // Add a small delay to ensure the audio element is ready
+            setTimeout(() => {
+              // Ensure loop is set to true
+              if (pinkNoiseRef.current) {
+                pinkNoiseRef.current.loop = true;
+                
+                // Always update the source to ensure it's using the latest settings
+                const audioUrl = PINK_NOISE_URLS[settingsInfo.pinkNoiseType];
+                pinkNoiseRef.current.src = audioUrl;
+              }
+              handlePinkNoisePlayback(true);
+            }, 500);
+          } else {
+            console.log('Not restarting pink noise - timer was paused or inactive');
+          }
         } else {
           console.log('Not restarting pink noise:', {
             isAuthenticated,
-            pinkNoiseEnabled: settingsInfo.pinkNoiseEnabled
+            pinkNoiseEnabled: settingsInfo.pinkNoiseEnabled,
+            hasStoredState: !!storedStateRef.current
           });
-          
-          // Reset the hidden time and clear stored state since we're not restarting pink noise
-          lastHiddenTimeRef.current = null;
-          storedStateRef.current = null;
         }
+        
+        // Reset the hidden time and clear stored state
+        lastHiddenTimeRef.current = null;
+        storedStateRef.current = null;
         
         // Log the current state
         console.log('Page visible again, current state:', {
