@@ -3,22 +3,47 @@
   "name": "Focus Mind AI",
   "icons": [
     {
-      "src": "focusMind.png",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "/focusMind.png",
+      "sizes": "72x72",
+      "type": "image/png"
     },
     {
-      "src": "focusMind.png",
-      "type": "image/png",
-      "sizes": "192x192"
+      "src": "/focusMind.png",
+      "sizes": "96x96",
+      "type": "image/png"
     },
     {
-      "src": "focusMind.png",
-      "type": "image/png",
-      "sizes": "512x512"
+      "src": "/focusMind.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "/focusMind.png",
+      "sizes": "144x144",
+      "type": "image/png"
+    },
+    {
+      "src": "/focusMind.png",
+      "sizes": "152x152",
+      "type": "image/png"
+    },
+    {
+      "src": "/focusMind.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/focusMind.png",
+      "sizes": "384x384",
+      "type": "image/png"
+    },
+    {
+      "src": "/focusMind.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
   "theme_color": "#336699",
   "background_color": "#30384b"
