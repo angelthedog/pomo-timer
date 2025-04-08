@@ -841,19 +841,45 @@ function Timer() {
         Your browser does not support the audio element.
       </audio>
       
-      <CircularProgressbar
-        value={percentage}
-        text={timeDisplay}
-        strokeWidth={50}
-        styles={buildStyles({
-          textColor: '#1a1a1a',
-          pathColor: mode === TIMER_MODES.WORK ? '#f54e4e' : '#4aec8c',
-          trailColor: 'rgba(255, 255, 255, 0.2)',
-          strokeLinecap: 'butt',
-          textSize: '32px',
-          pathTransitionDuration: 0.1
-        })}
-      />
+      <div style={{ position: 'relative', width: '300px', height: '300px', margin: '0 auto' }}>
+        <CircularProgressbar
+          value={percentage}
+          text=""
+          strokeWidth={50}
+          styles={buildStyles({
+            textColor: '#1a1a1a',
+            pathColor: mode === TIMER_MODES.WORK ? '#f54e4e' : '#4aec8c',
+            trailColor: 'rgba(255, 255, 255, 0.2)',
+            strokeLinecap: 'butt',
+            textSize: '32px',
+            pathTransitionDuration: 0.1
+          })}
+        />
+        <div style={{ 
+          position: 'absolute', 
+          top: '50%', 
+          left: '50%', 
+          transform: 'translate(-50%, -50%)',
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center',
+          fontFamily: 'Roboto Mono, "Courier New", monospace',
+          fontSize: '64px',
+          fontWeight: 'bold',
+          color: '#1a1a1a',
+          width: '100%'
+        }}>
+          <div style={{ width: '80px', textAlign: 'right' }}>
+            {timeDisplay.split(':')[0]}
+          </div>
+          <div style={{ width: '40px', textAlign: 'center' }}>
+            :
+          </div>
+          <div style={{ width: '80px', textAlign: 'left' }}>
+            {timeDisplay.split(':')[1]}
+          </div>
+        </div>
+      </div>
       
       {/* Debug info to verify values */}
       {process.env.NODE_ENV === 'development' && (
