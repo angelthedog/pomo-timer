@@ -908,12 +908,10 @@ function Timer() {
           <SettingsButton 
             onClick={handleSettingsClick} 
             disabled={!isSettingsAndStatsEnabled()}
-            tooltip={!isSettingsAndStatsEnabled() ? "Timer must be reset to access settings" : ""}
           />
           <StatsButton 
             onClick={handleStatsClick}
             disabled={!isSettingsAndStatsEnabled()}
-            tooltip={!isSettingsAndStatsEnabled() ? "Timer must be reset to view stats" : ""}
           />
         </div>
       )}
