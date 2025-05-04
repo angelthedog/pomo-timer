@@ -6,6 +6,8 @@ import { fetchDefaultSettings, saveSettings as apiSaveSettings } from '../utils/
 import { COLORS, TIMER_SETTINGS, PINK_NOISE_TYPES, PINK_NOISE_URLS, UI } from '../utils/constants';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
+import bleService from '../utils/bleService';
+import styles from '../styles/Settings.module.css';
 
 // OR if UI doesn't exist in constants, define it directly in Settings
 const SOUND_TEST_DURATION = 10000; // 10 seconds in milliseconds
@@ -23,6 +25,8 @@ function Settings() {
   const [isTestPlaying, setIsTestPlaying] = useState(false);
   const audioRef = useRef(null);
   const audioTimeoutRef = useRef(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionError, setConnectionError] = useState(null);
   
   // Load default settings from API
   useEffect(() => {
@@ -155,9 +159,29 @@ function Settings() {
   };
 
   // Handle noise cancellation toggle
-  const handleNoiseCancellationToggle = (value) => {
-    setNoiseCancellation(value);
-    console.log('Noise cancellation toggled:', value);
+  const handleNoiseCancellationToggle = async (enabled) => {
+    try {
+      if (!bleService.isConnected) {
+        setIsConnecting(true);
+        const connected = await bleService.connect();
+        if (!connected) {
+          setConnectionError('Failed to connect to device');
+          return;
+        }
+      }
+
+      const success = await bleService.setNoiseCancellation(enabled);
+      if (success) {
+        settingsInfo.setNoiseCancellation(enabled);
+        setNoiseCancellation(enabled);
+      } else {
+        setConnectionError('Failed to update noise cancellation setting');
+      }
+    } catch (error) {
+      setConnectionError(error.message);
+    } finally {
+      setIsConnecting(false);
+    }
   };
   
   // Add this function to handle test sound playback
@@ -230,6 +254,29 @@ function Settings() {
   };
 
   useEffect(() => {
+    // Set up event listeners for BLE service
+    bleService.on('connected', () => {
+      setIsConnecting(false);
+      setConnectionError(null);
+    });
+
+    bleService.on('disconnected', () => {
+      setIsConnecting(false);
+      setConnectionError('Disconnected from device');
+    });
+
+    bleService.on('error', (error) => {
+      setIsConnecting(false);
+      setConnectionError(error.message);
+    });
+
+    return () => {
+      // Clean up event listeners
+      bleService.removeAllListeners();
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
       // Use the cleanup function when component unmounts
       cleanupSound();
@@ -296,6 +343,7 @@ function Settings() {
                 e.stopPropagation();
                 handleNoiseCancellationToggle(e.target.checked);
               }}
+              disabled={isConnecting}
             />
             <span className="toggle-slider"></span>
           </div>
@@ -303,6 +351,8 @@ function Settings() {
         <div className="setting-description">
           Enable noise cancellation to reduce background noise during focus sessions
         </div>
+        {isConnecting && <p className={styles.status}>Connecting to device...</p>}
+        {connectionError && <p className={styles.error}>{connectionError}</p>}
       </div>
       
       <div className="setting-group">
