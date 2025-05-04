@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 
@@ -14,6 +14,8 @@ export default function Profile() {
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     console.log('Session status:', status);
@@ -81,6 +83,30 @@ export default function Profile() {
     router.push('/');
   };
 
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    try {
+      const res = await fetch('/api/user/delete-account', {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // Sign out the user after successful deletion
+        await signOut({ callbackUrl: '/' });
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Failed to delete account' });
+      }
+    } catch (error) {
+      console.error('Delete account error:', error);
+      setMessage({ type: 'error', text: 'An error occurred while deleting your account' });
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   if (status === 'loading') {
     return <div className="loading">Loading...</div>;
   }
@@ -131,8 +157,45 @@ export default function Profile() {
               </button>
             </div>
           </form>
+
+          <div className="delete-account-section">
+            <h2>Danger Zone</h2>
+            <p>Once you delete your account, there is no going back. Please be certain.</p>
+            <button
+              className="delete-account-button"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={deleteLoading}
+            >
+              Delete Account
+            </button>
+          </div>
         </div>
       </div>
+
+      {showDeleteConfirm && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h2>Delete Account</h2>
+            <p>Are you sure you want to delete your account? This action cannot be undone.</p>
+            <div className="modal-buttons">
+              <button
+                className="cancel-button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleteLoading}
+              >
+                Cancel
+              </button>
+              <button
+                className="delete-button"
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .profile-container {
@@ -256,6 +319,104 @@ export default function Profile() {
           min-height: calc(100vh - 150px);
           color: white;
           font-size: 1.2rem;
+        }
+
+        .delete-account-section {
+          margin-top: 2rem;
+          padding-top: 2rem;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .delete-account-section h2 {
+          color: #f54e4e;
+          margin-bottom: 0.5rem;
+        }
+
+        .delete-account-section p {
+          color: rgba(255, 255, 255, 0.7);
+          margin-bottom: 1rem;
+          font-size: 0.9rem;
+        }
+
+        .delete-account-button {
+          width: 100%;
+          padding: 0.75rem;
+          background-color: transparent;
+          color: #f54e4e;
+          border: 1px solid #f54e4e;
+          border-radius: 4px;
+          font-size: 1rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .delete-account-button:hover {
+          background-color: rgba(245, 78, 78, 0.1);
+        }
+
+        .delete-account-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(0, 0, 0, 0.7);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        }
+
+        .modal-content {
+          background-color: #30384b;
+          padding: 2rem;
+          border-radius: 10px;
+          width: 90%;
+          max-width: 400px;
+        }
+
+        .modal-content h2 {
+          color: #f54e4e;
+          margin-bottom: 1rem;
+        }
+
+        .modal-content p {
+          color: rgba(255, 255, 255, 0.7);
+          margin-bottom: 1.5rem;
+        }
+
+        .modal-buttons {
+          display: flex;
+          gap: 1rem;
+        }
+
+        .modal-buttons button {
+          flex: 1;
+          padding: 0.75rem;
+          border-radius: 4px;
+          font-size: 1rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .modal-buttons .delete-button {
+          background-color: #f54e4e;
+          color: white;
+          border: none;
+        }
+
+        .modal-buttons .delete-button:hover {
+          background-color: #e03e3e;
+        }
+
+        .modal-buttons .delete-button:disabled {
+          background-color: #ccc;
+          cursor: not-allowed;
         }
       `}</style>
     </>
