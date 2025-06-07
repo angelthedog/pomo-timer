@@ -17,7 +17,7 @@ function Settings() {
   const [saveStatus, setSaveStatus] = useState(null);
   const [workMinutes, setWorkMinutes] = useState(settingsInfo.workMinutes);
   const [breakMinutes, setBreakMinutes] = useState(settingsInfo.breakMinutes);
-  const [noiseCancellation, setNoiseCancellation] = useState(settingsInfo.noiseCancellation);
+  // const [noiseCancellation, setNoiseCancellation] = useState(settingsInfo.noiseCancellation);
   const [pinkNoiseEnabled, setPinkNoiseEnabled] = useState(settingsInfo.pinkNoiseEnabled);
   const [pinkNoiseType, setPinkNoiseType] = useState(settingsInfo.pinkNoiseType);
   const [isTestPlaying, setIsTestPlaying] = useState(false);
@@ -39,10 +39,10 @@ function Settings() {
           settingsInfo.setBreakMinutes(defaults.breakMinutes);
           setBreakMinutes(defaults.breakMinutes);
         }
-        if (defaults.noiseCancellation !== settingsInfo.noiseCancellation) {
-          settingsInfo.setNoiseCancellation(defaults.noiseCancellation);
-          setNoiseCancellation(defaults.noiseCancellation);
-        }
+        // if (defaults.noiseCancellation !== settingsInfo.noiseCancellation) {
+        //   settingsInfo.setNoiseCancellation(defaults.noiseCancellation);
+        //   setNoiseCancellation(defaults.noiseCancellation);
+        // }
         if (defaults.pinkNoiseEnabled !== settingsInfo.pinkNoiseEnabled) {
           settingsInfo.setPinkNoiseEnabled(defaults.pinkNoiseEnabled);
           setPinkNoiseEnabled(defaults.pinkNoiseEnabled);
@@ -86,7 +86,7 @@ function Settings() {
     // Update context
     settingsInfo.setWorkMinutes(workMinutes);
     settingsInfo.setBreakMinutes(breakMinutes);
-    settingsInfo.setNoiseCancellation(noiseCancellation);
+    // settingsInfo.setNoiseCancellation(noiseCancellation);
     settingsInfo.setPinkNoiseEnabled(pinkNoiseEnabled);
     settingsInfo.setPinkNoiseType(pinkNoiseType);
     
@@ -97,7 +97,7 @@ function Settings() {
       const result = await apiSaveSettings({
         workMinutes,
         breakMinutes,
-        noiseCancellation,
+        noiseCancellation: false, // Set default value since the toggle is disabled
         pinkNoiseEnabled,
         pinkNoiseType
       });
@@ -132,7 +132,8 @@ function Settings() {
     } finally {
       setIsSaving(false);
     }
-  }, [session, workMinutes, breakMinutes, noiseCancellation, pinkNoiseEnabled, pinkNoiseType, settingsInfo, cleanupSound]);
+  }, [session, workMinutes, breakMinutes, // noiseCancellation,
+  pinkNoiseEnabled, pinkNoiseType, settingsInfo, cleanupSound]);
   
   const getStatusStyles = useCallback((type) => ({
     marginTop: '10px',
@@ -154,11 +155,13 @@ function Settings() {
     }
   };
 
-  // Handle noise cancellation toggle
+  // Handle noise cancellation toggle - Temporarily Disabled
+  /*
   const handleNoiseCancellationToggle = (value) => {
     setNoiseCancellation(value);
     console.log('Noise cancellation toggled:', value);
   };
+  */
   
   // Add this function to handle test sound playback
   const handleTestSound = useCallback(() => {
@@ -276,6 +279,7 @@ function Settings() {
         </div>
       </div>
       
+      {/* Noise Cancellation Toggle - Temporarily Disabled
       <div className="setting-group">
         <div className="toggle-container">
           <label htmlFor="noiseCancellation" onClick={() => handleNoiseCancellationToggle(!noiseCancellation)}>
@@ -304,6 +308,7 @@ function Settings() {
           Enable noise cancellation to reduce background noise during focus sessions
         </div>
       </div>
+      */}
       
       <div className="setting-group">
         <div className="toggle-container">
