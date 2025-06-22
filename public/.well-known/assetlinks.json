@@ -1,0 +1,11 @@
+[
+    {
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "ai.focus_mind.app.twa",
+        "sha256_cert_fingerprints":
+          ["19:11:18:7A:FE:92:BF:C9:14:95:9C:55:E4:16:D5:55:32:CA:0C:05:B0:FC:C2:41:81:4C:63:10:D4:4D:96:2F"]
+      }
+    }
+  ]
